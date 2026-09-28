@@ -39,7 +39,12 @@ from pathlib import Path
 # ── Make `app` importable when running from project root ─────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    # The seed script can still run when python-dotenv isn't installed.
+    def load_dotenv() -> bool:
+        return False
 
 load_dotenv()
 

@@ -12,6 +12,11 @@ Key design points:
      (runs migrations against a live DB).
   4. NEVER calls Base.metadata.create_all() — only Alembic DDL operations.
 """
+import sys
+from pathlib import Path
+
+# Add backend directory to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import os
 from logging.config import fileConfig

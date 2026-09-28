@@ -29,3 +29,6 @@ httpx==0.28.1
 pytest==8.3.4
 pytest-asyncio==0.24.0
 httpx==0.28.1        # reused as async test client
+
+psycopg2-binary==2.9.13
+google-genai
