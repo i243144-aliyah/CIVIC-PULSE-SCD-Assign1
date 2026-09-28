@@ -241,3 +241,15 @@ Idempotency is achieved via deterministic `uuid5` IDs derived from seed row inde
 | `PATCH` | `/api/v1/complaints/{id}/status` | Transition complaint status |
 | `GET` | `/health/live` | Liveness probe |
 | `GET` | `/health/ready` | Readiness probe (checks DB) |
+
+## Frontend
+
+Start the API on port 8000, then run the React development UI from the project root:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Vite proxies relative `/api` requests to `http://localhost:8000`, so the built client does not bake in an environment-specific API URL. Run component tests with `npm test` and create a production bundle with `npm run build`.
