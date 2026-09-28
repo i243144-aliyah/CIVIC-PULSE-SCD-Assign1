@@ -1,10 +1,11 @@
 """
 app/routes/health.py
-─────────────────────
-Lightweight health-check endpoints for load-balancer / k8s probes.
+────────────────────
+Health probes strictly distinguished for Kubernetes and container readiness:
 
-GET /health/live   → always 200 (process is up)
-GET /health/ready  → 200 if DB is reachable, 503 otherwise
+GET /health  (Liveness)   → 200 if process is up. MUST NOT touch the database.
+GET /ready   (Readiness)  → 200 only if Postgres AND Redis are both reachable.
+                           Returns 503 naming the failed dependency.
 """
 
 from fastapi import APIRouter, Depends, status
@@ -13,28 +14,57 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.redis import check_redis_health
 
-router = APIRouter(prefix="/health", tags=["Health"])
+router = APIRouter(tags=["Health"])
 
 
-@router.get("/live", summary="Liveness probe")
+@router.get("/health", summary="Liveness probe")
+@router.get("/health/live", summary="Liveness probe (legacy alias)")
 async def liveness() -> dict:
-    """Returns 200 immediately – confirms the process is running."""
+    """
+    Liveness probe.
+    Must NOT touch the database or Redis. Failing this restarts the container.
+    """
     return {"status": "ok"}
 
 
 @router.get("/ready", summary="Readiness probe")
+@router.get("/health/ready", summary="Readiness probe (legacy alias)")
 async def readiness(session: AsyncSession = Depends(get_session)) -> JSONResponse:
     """
-    Confirms the application can reach the PostgreSQL database.
-    Returns 503 if the DB is not reachable so the load balancer can
-    drain traffic from this instance during DB downtime.
+    Readiness probe.
+    Returns 200 only if Postgres and Redis are both reachable.
+    Returns 503 naming the failed dependency so traffic is drained.
     """
+    # 1. Check PostgreSQL
+    postgres_ok = False
     try:
         await session.execute(text("SELECT 1"))
-        return JSONResponse(content={"status": "ready"})
-    except Exception as exc:
+        postgres_ok = True
+    except Exception:
+        postgres_ok = False
+
+    # 2. Check Redis
+    redis_ok = await check_redis_health()
+
+    if postgres_ok and redis_ok:
         return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not_ready", "detail": str(exc)},
+            status_code=status.HTTP_200_OK,
+            content={"status": "ready", "database": "connected", "redis": "connected"},
         )
+
+    failed = []
+    if not postgres_ok:
+        failed.append("database")
+    if not redis_ok:
+        failed.append("redis")
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "not_ready",
+            "failed_dependencies": failed,
+            "detail": f"Dependency check failed: {', '.join(failed)} unreachable",
+        },
+    )

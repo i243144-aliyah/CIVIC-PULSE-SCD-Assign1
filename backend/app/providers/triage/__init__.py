@@ -1,5 +1,5 @@
 """
-app/providers/__init__.py
+app/providers/triage/__init__.py
 """
 
 from app.providers.triage.base import TriageProvider, TriageResult
@@ -10,8 +10,8 @@ from app.providers.triage.rules import RuleBasedTriage
 from app.providers.triage.simulated import SimulatedTriage
 
 __all__ = [
-    "TriageProvider",
     "TriageResult",
+    "TriageProvider",
     "LLMTriage",
     "OllamaTriage",
     "RuleBasedTriage",

@@ -1,46 +1,41 @@
 """
 app/services/triage_service.py
 ───────────────────────────────
-Triage orchestration service — the heart of the complaint lifecycle.
+Triage orchestration service — the core intelligence and lifecycle manager.
 
 Layer contract
 ──────────────
 • Receives validated Pydantic schemas from the routes layer.
-• Owns all business logic: provider selection, fallback chain, state machine.
-• Delegates ALL persistence to ComplaintRepository (never touches SQLAlchemy directly).
+• Owns business logic: caching, provider selection, fallback handling, state machine.
+• Delegates ALL database persistence to ComplaintRepository.
 • Returns ORM instances (or raises domain exceptions) to the routes layer.
 
-Provider fallback chain
-───────────────────────
-  1. GroqProvider   (if GROQ_API_KEY is set)
-  2. OllamaProvider (if Ollama server is reachable)
-  3. RulesProvider  (always succeeds; tagged as "rules" or "rules:fallback")
-
-State machine – valid transitions
-──────────────────────────────────
-  open  ──→  in_progress  ──→  resolved
-  open  ──→  rejected
-  in_progress  ──→  rejected
-  (terminal states: resolved, rejected → no further transitions allowed)
+AI Triage Flow (Phase 2)
+────────────────────────
+1. Check Redis content-hash cache (24h TTL) to avoid duplicate inference.
+2. If cache miss, invoke active TriageProvider (LLM, Ollama, Rules, Simulated).
+3. If LLM fails (timeout/429/5xx after retry), fallback to RuleBasedTriage (rules:fallback).
+4. Cache result in Redis for duplicate complaints.
+5. Persist complaint with triage metadata (category, priority, summary, latency).
 """
 
+import asyncio
 import logging
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import ComplaintStatus, TriagedBy
-from app.providers.groq_provider import GroqProvider
-from app.providers.ollama_provider import OllamaProvider
-from app.providers.rules_provider import RulesProvider
+from app.core.enums import ComplaintCategory, ComplaintStatus, TriagedBy
+from app.providers.cache import triage_cache
+from app.providers.triage.base import TriageProvider, TriageResult
+from app.providers.triage.factory import get_triage_provider
+from app.providers.triage.rules import RuleBasedTriage
 from app.repositories.complaint_repository import ComplaintRepository
 from app.schemas.complaint import CreateComplaintRequest
 
 logger = logging.getLogger(__name__)
 
 # ── Valid status transitions ──────────────────────────────────────────────────
-# Maps current_status → set of allowed next statuses.
-# The state machine is enforced HERE, not at the DB level, so the error
-# message can be descriptive and HTTP 409 can be returned to clients.
 _VALID_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     ComplaintStatus.open:        {ComplaintStatus.in_progress, ComplaintStatus.rejected},
     ComplaintStatus.in_progress: {ComplaintStatus.resolved, ComplaintStatus.rejected},
@@ -52,11 +47,7 @@ _VALID_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
 class InvalidStatusTransitionError(Exception):
     """Raised when a status transition is not allowed by the state machine."""
 
-    def __init__(
-        self,
-        current: ComplaintStatus,
-        requested: ComplaintStatus,
-    ) -> None:
+    def __init__(self, current: ComplaintStatus, requested: ComplaintStatus) -> None:
         self.current = current
         self.requested = requested
         super().__init__(
@@ -72,98 +63,108 @@ class ComplaintNotFoundError(Exception):
 
 class TriageService:
     """
-    Orchestrates complaint creation (triage) and status transitions.
-
-    One instance is created per request via FastAPI dependency injection;
-    it receives the db session and constructs its own repository.
+    Orchestrates complaint triage, caching, persistence, and state transitions.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._repo = ComplaintRepository(session)
-        # Providers are constructed once per service instance (per request).
-        # In Phase 2 these will be singletons injected via DI.
-        self._groq = GroqProvider()
-        self._ollama = OllamaProvider()
-        self._rules = RulesProvider()
+    def __init__(
+        self,
+        session: AsyncSession | None = None,
+        provider: TriageProvider | None = None,
+        repo: ComplaintRepository | None = None,
+    ) -> None:
+        self._repo = repo or (ComplaintRepository(session) if session is not None else None)
+        self._provider = provider or get_triage_provider()
 
     # ── Triage & creation ─────────────────────────────────────────────────
 
     async def create_complaint(self, request: CreateComplaintRequest):
         """
-        Run triage and persist the new complaint.
+        Triage and persist a new complaint.
 
         Steps:
-          1. Attempt LLM triage via the provider chain.
-          2. Fall back to rules engine if all LLMs are unavailable/fail.
-          3. Persist via repository and return the ORM instance.
+          1. Check Redis 24h content-hash cache for duplicate complaint.
+          2. On cache miss: execute active provider (with internal fallback).
+          3. Save result to Redis content-hash cache.
+          4. Persist to PostgreSQL via ComplaintRepository.
         """
-        triage_result = await self._run_triage_chain(
-            text=request.text,
-            location=request.location,
-            category=request.category,
-        )
-        logger.info(
-            "Triage complete: provider=%s priority=%s latency=%dms",
-            triage_result.triaged_by,
-            triage_result.priority.value,
-            triage_result.latency_ms,
+        # Step 1: Check Redis content-hash cache
+        cached_result = await triage_cache.get(request.text, request.location)
+        if cached_result is not None:
+            triage_result = cached_result
+            triaged_by_str = getattr(self._provider, "last_triaged_by", self._provider.name)
+            latency_ms = 1
+            logger.info("Triage result served from Redis content-hash cache (1ms)")
+        else:
+            # Step 2: Execute active TriageProvider in worker thread
+            t0 = time.monotonic()
+            try:
+                triage_result = await asyncio.to_thread(
+                    self._provider.triage,
+                    request.text,
+                    request.location,
+                )
+                triaged_by_str = getattr(self._provider, "last_triaged_by", self._provider.name)
+            except Exception as exc:
+                logger.warning(
+                    "TriageProvider %s raised error (%s). Falling back to RuleBasedTriage.",
+                    getattr(self._provider, "name", "unknown"),
+                    exc,
+                )
+                fallback = RuleBasedTriage(name="rules:fallback")
+                triage_result = fallback.triage(request.text, request.location)
+                triaged_by_str = "rules:fallback"
+
+            latency_ms = max(1, int((time.monotonic() - t0) * 1000))
+
+            # Step 3: Cache result in Redis for 24h
+            await triage_cache.set(request.text, request.location, triage_result)
+
+        # Normalize triaged_by for PostgreSQL ENUM safety
+        db_triaged_by = self._normalize_triaged_by(triaged_by_str)
+
+        category_val = (
+            triage_result.category.value
+            if isinstance(triage_result.category, ComplaintCategory)
+            else str(triage_result.category)
         )
 
         complaint_data = {
             "text":              request.text,
             "location":          request.location,
             "reporter_contact":  request.reporter_contact,
-            "category":          request.category.value,
+            "category":          category_val,
             "priority":          triage_result.priority.value,
             "status":            ComplaintStatus.open.value,
-            "ai_summary":        triage_result.ai_summary,
-            "triaged_by":        triage_result.triaged_by,
-            "triage_latency_ms": triage_result.latency_ms,
+            "ai_summary":        triage_result.summary,
+            "triaged_by":        db_triaged_by,
+            "triage_latency_ms": latency_ms,
         }
-        return await self._repo.create(complaint_data)
 
-    async def _run_triage_chain(self, *, text: str, location: str, category):
-        """
-        Try each provider in order; fall back to rules on failure.
+        result = await self._repo.create(complaint_data)
+        # Invalidate the /api/stats 30s cache on every new complaint
+        from app.routes.stats import invalidate_stats_cache
+        await invalidate_stats_cache()
+        return result
 
-        Returns the first successful TriageResult.
-        """
-        from app.core.enums import ComplaintCategory  # avoid circular at module level
-
-        # 1. Try Groq
-        if await self._groq.is_available():
-            try:
-                return await self._groq.triage(text, location, category)
-            except Exception as exc:
-                logger.warning("GroqProvider failed (%s); trying Ollama.", exc)
-
-        # 2. Try Ollama
-        if await self._ollama.is_available():
-            try:
-                return await self._ollama.triage(text, location, category)
-            except Exception as exc:
-                logger.warning("OllamaProvider failed (%s); falling back to rules.", exc)
-
-        # 3. Rules engine (always succeeds)
-        #    Tag as "rules:fallback" if we attempted an LLM above, "rules" otherwise.
-        groq_configured = bool(await self._groq.is_available.__func__(self._groq)
-                               if False else await self._groq.is_available())
-        tag = TriagedBy.rules_fallback.value if (
-            await self._groq.is_available() or await self._ollama.is_available()
-        ) else TriagedBy.rules.value
-
-        return await self._rules.triage(text, location, category, triaged_by=tag)
+    def _normalize_triaged_by(self, raw: str) -> str:
+        """Map provider identifier to valid PostgreSQL triaged_by enum value."""
+        valid_values = {e.value for e in TriagedBy}
+        if raw in valid_values:
+            return raw
+        if "fallback" in raw:
+            return TriagedBy.rules_fallback.value
+        if "ollama" in raw:
+            return TriagedBy.llm_ollama.value
+        if "rules" in raw:
+            return TriagedBy.rules.value
+        # Simulated or Gemini or default LLM maps to llm:groq
+        return TriagedBy.llm_groq.value
 
     # ── Status transition (state machine) ─────────────────────────────────
 
     async def update_status(self, complaint_id, new_status: ComplaintStatus):
         """
-        Apply a status transition after validating it against the state machine.
-
-        Raises
-        ------
-        ComplaintNotFoundError         if the complaint does not exist.
-        InvalidStatusTransitionError   if the transition is not allowed.
+        Apply a status transition after validating against the state machine.
         """
         complaint = await self._repo.get_by_id(complaint_id)
         if complaint is None:
@@ -175,12 +176,15 @@ class TriageService:
         if new_status not in allowed:
             raise InvalidStatusTransitionError(current_status, new_status)
 
-        return await self._repo.update_status(complaint_id, new_status)
+        result = await self._repo.update_status(complaint_id, new_status)
+        # Invalidate the /api/stats 30s cache on status changes
+        from app.routes.stats import invalidate_stats_cache
+        await invalidate_stats_cache()
+        return result
 
     # ── Queries ───────────────────────────────────────────────────────────
 
     async def get_complaint(self, complaint_id):
-        """Fetch a single complaint; raises ComplaintNotFoundError if absent."""
         complaint = await self._repo.get_by_id(complaint_id)
         if complaint is None:
             raise ComplaintNotFoundError(f"Complaint {complaint_id} not found.")
@@ -195,7 +199,6 @@ class TriageService:
         page: int = 1,
         page_size: int = 20,
     ):
-        """Delegate to repository; no business logic on reads."""
         return await self._repo.list_complaints(
             status=status,
             category=category,

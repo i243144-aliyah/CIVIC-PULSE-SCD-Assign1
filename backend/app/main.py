@@ -6,12 +6,12 @@ FastAPI application factory.
 Startup sequence
 ────────────────
 1. Build the FastAPI app with metadata from settings.
-2. Register exception handlers (validation errors → 422, catch-all → 500).
-3. Mount all routers.
-4. Verify DB connectivity on startup (readiness log, NOT schema creation).
+2. Register exception handlers.
+3. Mount all routers (health, complaints, meta under /api and /api/v1).
+4. Manage Redis and database lifecycle on startup/shutdown.
 
 IMPORTANT: This module does NOT call Base.metadata.create_all() or any
-equivalent.  All schema changes go through Alembic migrations.
+equivalent. All schema changes go through Alembic migrations.
 """
 
 import logging
@@ -21,8 +21,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.redis import close_redis
 from app.routes.complaints import router as complaints_router
 from app.routes.health import router as health_router
+from app.routes.meta import router as meta_router
+from app.routes.stats import router as stats_router
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +38,14 @@ logging.basicConfig(
 def create_app() -> FastAPI:
     """
     Application factory – instantiate and configure the FastAPI app.
-
-    Using a factory instead of a module-level app object makes the app
-    testable: tests can call create_app() with different settings.
     """
     app = FastAPI(
         title="CivicPulse API",
         description=(
             "AI-assisted civic complaint management system. "
-            "Complaints are triaged automatically using LLMs or deterministic rules."
+            "Complaints are triaged automatically using LLMs, local Ollama, or deterministic rules."
         ),
-        version="0.1.0",
+        version="0.2.0",
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -53,7 +53,6 @@ def create_app() -> FastAPI:
     )
 
     # ── CORS ──────────────────────────────────────────────────────────────
-    # Adjust `allow_origins` per environment in production.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"] if settings.app_debug else [],
@@ -63,7 +62,6 @@ def create_app() -> FastAPI:
     )
 
     # ── Global exception handlers ─────────────────────────────────────────
-
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(
         request: Request, exc: Exception
@@ -75,25 +73,35 @@ def create_app() -> FastAPI:
         )
 
     # ── Routers ───────────────────────────────────────────────────────────
+    # Health endpoints: /health and /ready
     app.include_router(health_router)
+
+    # Main API endpoints: mounted at /api (assignment contract) and /api/v1 (versioned)
+    app.include_router(complaints_router, prefix="/api")
     app.include_router(complaints_router, prefix="/api/v1")
 
-    # ── Startup event ─────────────────────────────────────────────────────
+    # Metadata & Observability: /api/meta/providers
+    app.include_router(meta_router, prefix="/api")
+    app.include_router(meta_router, prefix="/api/v1")
+
+    # Stats: GET /api/stats (30s Redis read-through cache, X-Cache header)
+    app.include_router(stats_router, prefix="/api")
+    app.include_router(stats_router, prefix="/api/v1")
+
+    # ── Lifecycle events ──────────────────────────────────────────────────
     @app.on_event("startup")
     async def on_startup() -> None:
-        """
-        Log startup.  Does NOT create tables – that is Alembic's job.
-        A deliberate DB ping is done via GET /health/ready by the orchestrator.
-        """
         logger.info(
-            "CivicPulse API starting | env=%s debug=%s",
+            "CivicPulse API starting | env=%s triage_provider=%s debug=%s",
             settings.app_env,
+            settings.triage_provider,
             settings.app_debug,
         )
 
     @app.on_event("shutdown")
     async def on_shutdown() -> None:
-        logger.info("CivicPulse API shutting down.")
+        logger.info("CivicPulse API shutting down - closing Redis pools.")
+        await close_redis()
 
     return app
 

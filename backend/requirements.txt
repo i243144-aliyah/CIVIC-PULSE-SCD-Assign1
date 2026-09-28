@@ -32,3 +32,4 @@ httpx==0.28.1        # reused as async test client
 
 psycopg2-binary==2.9.13
 google-genai
+redis==5.2.1

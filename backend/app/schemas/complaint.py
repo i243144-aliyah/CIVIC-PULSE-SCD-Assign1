@@ -32,10 +32,11 @@ from app.core.enums import (
 
 class CreateComplaintRequest(BaseModel):
     """
-    Body accepted by POST /complaints.
+    Body accepted by POST /api/complaints.
 
-    All length constraints mirror the DB CheckConstraints in Complaint model
-    so that invalid data is rejected before hitting the database.
+    Category is optional because the AI triage engine reads the free text and
+    determines the category automatically. If provided, it can be used as a hint.
+    All length constraints mirror the DB CheckConstraints in the Complaint model.
     """
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -60,9 +61,9 @@ class CreateComplaintRequest(BaseModel):
         description="Optional contact info for the reporter (email, phone, etc.).",
         examples=["jane.doe@example.com"],
     )
-    category: ComplaintCategory = Field(
-        ...,
-        description="Civic service domain of the complaint.",
+    category: ComplaintCategory | None = Field(
+        default=None,
+        description="Optional domain; if omitted, AI triage engine classifies the text.",
     )
 
 

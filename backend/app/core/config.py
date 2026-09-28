@@ -8,13 +8,13 @@ reaches for os.environ directly.
 
 from functools import lru_cache
 
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -39,9 +39,32 @@ class Settings(BaseSettings):
     app_port: int = Field(default=8000)
     log_level: str = Field(default="info")
 
-    # ── LLM providers (Phase 2 – populated later) ─────────────────────────
+    # ── AI / LLM Providers (Phase 2) ──────────────────────────────────────
+    triage_provider: str = Field(
+        default="rules",
+        description="Active triage provider: llm, ollama, rules, simulated",
+    )
+    llm_engine: str = Field(
+        default="gemini",
+        description="Hosted LLM backend engine for LLMTriage: gemini or groq",
+    )
+    gemini_api_key: str = Field(default="")
     groq_api_key: str = Field(default="")
     ollama_base_url: str = Field(default="http://localhost:11434")
+
+    # ── Redis (Cache & Rate Limiter) ──────────────────────────────────────
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL for cache and distributed rate limiter.",
+    )
+    rate_limit_per_minute: int = Field(
+        default=30,
+        description="Maximum POST /api/complaints requests per client IP per minute.",
+    )
+    triage_cache_ttl_seconds: int = Field(
+        default=86400,
+        description="TTL for content-hash triage cache (24 hours = 86400s).",
+    )
 
     @field_validator("app_env")
     @classmethod

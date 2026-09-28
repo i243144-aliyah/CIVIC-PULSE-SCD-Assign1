@@ -126,3 +126,56 @@ class ComplaintRepository:
         stmt = select(func.count()).where(Complaint.id == complaint_id)
         count: int = (await self._session.execute(stmt)).scalar_one()
         return count > 0
+
+    async def get_stats(self) -> dict:
+        """
+        Compute aggregate statistics across the full complaints table.
+
+        Returns a dict ready to be JSON-serialised for GET /api/stats.
+        Uses a single SQL pass (FILTER clauses) so it never table-scans twice.
+        """
+        from sqlalchemy import case, literal
+
+        total_stmt = select(
+            func.count().label("total"),
+            func.count().filter(Complaint.status == "open").label("open"),
+            func.count().filter(Complaint.status == "in_progress").label("in_progress"),
+            func.count().filter(Complaint.status == "resolved").label("resolved"),
+            func.count().filter(Complaint.status == "rejected").label("rejected"),
+            func.count().filter(Complaint.priority == "high").label("high"),
+            func.count().filter(Complaint.priority == "normal").label("normal"),
+            func.count().filter(Complaint.priority == "low").label("low"),
+            func.count().filter(Complaint.category == "water").label("water"),
+            func.count().filter(Complaint.category == "electricity").label("electricity"),
+            func.count().filter(Complaint.category == "sanitation").label("sanitation"),
+            func.count().filter(Complaint.category == "roads").label("roads"),
+            func.count().filter(Complaint.category == "streetlights").label("streetlights"),
+            func.count().filter(Complaint.category == "other").label("other"),
+            func.avg(Complaint.triage_latency_ms).label("avg_latency_ms"),
+        ).select_from(Complaint)
+
+        row = (await self._session.execute(total_stmt)).one()
+
+        return {
+            "total": row.total,
+            "by_status": {
+                "open": row.open,
+                "in_progress": row.in_progress,
+                "resolved": row.resolved,
+                "rejected": row.rejected,
+            },
+            "by_priority": {
+                "high": row.high,
+                "normal": row.normal,
+                "low": row.low,
+            },
+            "by_category": {
+                "water": row.water,
+                "electricity": row.electricity,
+                "sanitation": row.sanitation,
+                "roads": row.roads,
+                "streetlights": row.streetlights,
+                "other": row.other,
+            },
+            "avg_triage_latency_ms": round(float(row.avg_latency_ms or 0), 2),
+        }

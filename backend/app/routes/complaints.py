@@ -5,12 +5,12 @@ HTTP layer for the Complaint resource.
 
 Layer contract
 ──────────────
-• Parses HTTP inputs (path params, query params, JSON bodies) into Pydantic schemas.
-• Injects the service via FastAPI DI; NEVER calls repositories directly.
-• Serializes service output (ORM instances) into Pydantic response schemas.
-• Handles domain exceptions (ComplaintNotFoundError, InvalidStatusTransitionError)
-  and maps them to appropriate HTTP status codes.
-• Contains NO business logic – no conditionals beyond error mapping.
+• Parses HTTP inputs into Pydantic schemas.
+• Enforces rate limiting on complaint submissions via DistributedRateLimiter.
+• Injects TriageService via FastAPI DI; NEVER calls repositories directly.
+• Serializes service output into Pydantic response schemas.
+• Maps domain exceptions to HTTP status codes (404, 409).
+• Contains NO business logic.
 """
 
 import uuid
@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.enums import ComplaintCategory, ComplaintPriority, ComplaintStatus
+from app.providers.rate_limiter import rate_limiter
 from app.schemas.complaint import (
     ComplaintListResponse,
     ComplaintResponse,
@@ -47,9 +48,11 @@ def _get_service(session: AsyncSession = Depends(get_session)) -> TriageService:
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new civic complaint",
     description=(
-        "Accepts a complaint, runs AI/rules triage to assign priority and "
-        "generate an optional summary, then persists the record."
+        "Accepts a complaint, validates rate limiting per client IP, runs AI triage "
+        "(or Redis content-hash cache lookup) to assign category, priority, and summary, "
+        "and persists the record."
     ),
+    dependencies=[Depends(rate_limiter)],
 )
 async def create_complaint(
     body: CreateComplaintRequest,
