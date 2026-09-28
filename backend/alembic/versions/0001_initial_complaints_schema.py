@@ -26,7 +26,7 @@ Running `alembic downgrade base` returns the DB to a pristine empty state.
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects import postgresql                           
 from alembic import op
 
 # revision identifiers
