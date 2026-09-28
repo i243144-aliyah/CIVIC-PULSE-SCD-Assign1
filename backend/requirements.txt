@@ -1,0 +1,31 @@
+# ──────────────────────────────────────────────
+# CivicPulse – Python dependencies
+# Pin major versions; patch upgrades are safe.
+# ──────────────────────────────────────────────
+
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Validation (Pydantic v2 — 2.11+ ships pre-built wheels for Python 3.14)
+pydantic==2.11.4
+pydantic-settings==2.9.1
+
+# Database (async SQLAlchemy + asyncpg driver)
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+
+# Migrations
+alembic==1.14.0
+
+# Serialization helpers
+python-dotenv==1.0.1
+python-multipart==0.0.17
+
+# HTTP client (for outbound integrations / providers)
+httpx==0.28.1
+
+# Dev / testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1        # reused as async test client
