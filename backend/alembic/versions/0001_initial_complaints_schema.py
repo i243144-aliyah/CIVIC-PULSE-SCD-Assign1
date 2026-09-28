@@ -26,7 +26,7 @@ Running `alembic downgrade base` returns the DB to a pristine empty state.
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers
@@ -35,56 +35,90 @@ down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# ── Define ENUM types using the dialect-specific postgresql.ENUM ──────────────
+# Using postgresql.ENUM with create_type=False reliably prevents the
+# _on_table_create event from firing a second CREATE TYPE during
+# op.create_table(). The types are created explicitly via op.execute().
+_complaint_category = postgresql.ENUM(
+    "water", "electricity", "sanitation",
+    "roads", "streetlights", "other",
+    name="complaint_category",
+    create_type=False,
+)
+
+_complaint_priority = postgresql.ENUM(
+    "high", "normal", "low",
+    name="complaint_priority",
+    create_type=False,
+)
+
+_complaint_status = postgresql.ENUM(
+    "open", "in_progress", "resolved", "rejected",
+    name="complaint_status",
+    create_type=False,
+)
+
+_triaged_by = postgresql.ENUM(
+    "llm:groq", "llm:ollama", "rules", "rules:fallback",
+    name="triaged_by",
+    create_type=False,
+)
+
 
 def upgrade() -> None:
     # ─────────────────────────────────────────────────────────────────────
-    # Step 1: Create PostgreSQL ENUM types
+    # Step 1: Create PostgreSQL ENUM types via raw SQL
     #
-    # ENUM types must be created BEFORE the table that references them.
-    # Using `checkfirst=True` makes each CREATE TYPE call idempotent
-    # (no error if the type already exists), which is useful during
-    # development when running partial rollbacks and re-applying.
+    # Using DO $$ blocks for true idempotency: PostgreSQL has no
+    # CREATE TYPE IF NOT EXISTS, so we check pg_type first.
+    # Raw SQL avoids the sa.Enum._on_table_create event bug entirely.
     # ─────────────────────────────────────────────────────────────────────
 
-    complaint_category = sa.Enum(
-        "water",
-        "electricity",
-        "sanitation",
-        "roads",
-        "streetlights",
-        "other",
-        name="complaint_category",
-    )
-    complaint_category.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'complaint_category') THEN
+                CREATE TYPE complaint_category AS ENUM (
+                    'water', 'electricity', 'sanitation',
+                    'roads', 'streetlights', 'other'
+                );
+            END IF;
+        END $$;
+    """)
 
-    complaint_priority = sa.Enum(
-        "high",
-        "normal",
-        "low",
-        name="complaint_priority",
-    )
-    complaint_priority.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'complaint_priority') THEN
+                CREATE TYPE complaint_priority AS ENUM ('high', 'normal', 'low');
+            END IF;
+        END $$;
+    """)
 
-    complaint_status = sa.Enum(
-        "open",
-        "in_progress",
-        "resolved",
-        "rejected",
-        name="complaint_status",
-    )
-    complaint_status.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'complaint_status') THEN
+                CREATE TYPE complaint_status AS ENUM (
+                    'open', 'in_progress', 'resolved', 'rejected'
+                );
+            END IF;
+        END $$;
+    """)
 
-    triaged_by = sa.Enum(
-        "llm:groq",
-        "llm:ollama",
-        "rules",
-        "rules:fallback",
-        name="triaged_by",
-    )
-    triaged_by.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'triaged_by') THEN
+                CREATE TYPE triaged_by AS ENUM (
+                    'llm:groq', 'llm:ollama', 'rules', 'rules:fallback'
+                );
+            END IF;
+        END $$;
+    """)
 
     # ─────────────────────────────────────────────────────────────────────
     # Step 2: Create the `complaints` table
+    #
+    # All enum columns use postgresql.ENUM with create_type=False so
+    # SQLAlchemy will NOT try to emit CREATE TYPE again during table
+    # creation. The types were already created in Step 1.
     # ─────────────────────────────────────────────────────────────────────
     op.create_table(
         "complaints",
@@ -95,7 +129,7 @@ def upgrade() -> None:
         # convenience, but the DB default is the authoritative source.
         sa.Column(
             "id",
-            UUID(as_uuid=True),
+            postgresql.UUID(as_uuid=True),
             primary_key=True,
             server_default=sa.text("gen_random_uuid()"),
             nullable=False,
@@ -125,32 +159,19 @@ def upgrade() -> None:
         # ── Classification ─────────────────────────────────────────────────
         sa.Column(
             "category",
-            sa.Enum(
-                "water", "electricity", "sanitation",
-                "roads", "streetlights", "other",
-                name="complaint_category",
-                create_type=False,      # type already created above
-            ),
+            _complaint_category,
             nullable=False,
             comment="Civic service domain.",
         ),
         sa.Column(
             "priority",
-            sa.Enum(
-                "high", "normal", "low",
-                name="complaint_priority",
-                create_type=False,
-            ),
+            _complaint_priority,
             nullable=False,
             comment="Triage-assigned urgency.",
         ),
         sa.Column(
             "status",
-            sa.Enum(
-                "open", "in_progress", "resolved", "rejected",
-                name="complaint_status",
-                create_type=False,
-            ),
+            _complaint_status,
             nullable=False,
             server_default="open",
             comment="Lifecycle state; defaults to 'open'.",
@@ -165,11 +186,7 @@ def upgrade() -> None:
         ),
         sa.Column(
             "triaged_by",
-            sa.Enum(
-                "llm:groq", "llm:ollama", "rules", "rules:fallback",
-                name="triaged_by",
-                create_type=False,
-            ),
+            _triaged_by,
             nullable=False,
             comment="Which triage engine processed this complaint.",
         ),
@@ -282,8 +299,8 @@ def downgrade() -> None:
     # Drop the table before the enum types it references
     op.drop_table("complaints")
 
-    # Drop ENUM types (must happen after the table is gone)
-    sa.Enum(name="triaged_by").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="complaint_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="complaint_priority").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="complaint_category").drop(op.get_bind(), checkfirst=True)
+    # Drop ENUM types via raw SQL (must happen after the table is gone)
+    op.execute("DROP TYPE IF EXISTS triaged_by")
+    op.execute("DROP TYPE IF EXISTS complaint_status")
+    op.execute("DROP TYPE IF EXISTS complaint_priority")
+    op.execute("DROP TYPE IF EXISTS complaint_category")
