@@ -14,25 +14,75 @@ IMPORTANT: This module does NOT call Base.metadata.create_all() or any
 equivalent. All schema changes go through Alembic migrations.
 """
 
+import contextvars
+import json
 import logging
+import sys
+import time
+import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.database import engine
+from app.core.observability import metrics
 from app.core.redis import close_redis
 from app.routes.complaints import router as complaints_router
 from app.routes.health import router as health_router
 from app.routes.meta import router as meta_router
+from app.routes.metrics import router as metrics_router
 from app.routes.stats import router as stats_router
 
 logger = logging.getLogger(__name__)
+request_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
+
+
+class JSONLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "request_id": request_id_context.get(),
+        }
+        for field in ("complaint_id", "provider", "error_class"):
+            if hasattr(record, field):
+                payload[field] = getattr(record, field)
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=True)
+
 
 logging.basicConfig(
     level=settings.log_level.upper(),
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True,
 )
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(JSONLogFormatter())
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    logger.info(
+        "CivicPulse API starting | env=%s triage_provider=%s debug=%s",
+        settings.app_env,
+        settings.triage_provider,
+        settings.app_debug,
+    )
+    try:
+        yield
+    finally:
+        logger.info("CivicPulse API shutting down; closing connection pools.")
+        try:
+            await close_redis()
+        finally:
+            await engine.dispose()
 
 
 def create_app() -> FastAPI:
@@ -50,6 +100,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
         debug=settings.app_debug,
+        lifespan=lifespan,
     )
 
     # ── CORS ──────────────────────────────────────────────────────────────
@@ -60,6 +111,21 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def request_observability(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID", "")[:128] or str(uuid.uuid4())
+        token = request_id_context.set(request_id)
+        started = time.perf_counter()
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            metrics.observe_request(request.method, status_code, time.perf_counter() - started)
+            request_id_context.reset(token)
 
     # ── Global exception handlers ─────────────────────────────────────────
     @app.exception_handler(Exception)
@@ -72,9 +138,28 @@ def create_app() -> FastAPI:
             content={"detail": "An unexpected error occurred. Please try again later."},
         )
 
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": [
+                    {
+                        "field": ".".join(str(part) for part in error["loc"]),
+                        "message": error["msg"],
+                        "type": error["type"],
+                    }
+                    for error in exc.errors()
+                ]
+            },
+        )
+
     # ── Routers ───────────────────────────────────────────────────────────
     # Health endpoints: /health and /ready
     app.include_router(health_router)
+    app.include_router(metrics_router)
 
     # Main API endpoints: mounted at /api (assignment contract) and /api/v1 (versioned)
     app.include_router(complaints_router, prefix="/api")
@@ -87,21 +172,6 @@ def create_app() -> FastAPI:
     # Stats: GET /api/stats (30s Redis read-through cache, X-Cache header)
     app.include_router(stats_router, prefix="/api")
     app.include_router(stats_router, prefix="/api/v1")
-
-    # ── Lifecycle events ──────────────────────────────────────────────────
-    @app.on_event("startup")
-    async def on_startup() -> None:
-        logger.info(
-            "CivicPulse API starting | env=%s triage_provider=%s debug=%s",
-            settings.app_env,
-            settings.triage_provider,
-            settings.app_debug,
-        )
-
-    @app.on_event("shutdown")
-    async def on_shutdown() -> None:
-        logger.info("CivicPulse API shutting down - closing Redis pools.")
-        await close_redis()
 
     return app
 

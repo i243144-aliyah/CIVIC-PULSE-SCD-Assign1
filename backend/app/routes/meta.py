@@ -8,6 +8,7 @@ Observability surface endpoints:
 from fastapi import APIRouter
 
 from app.core.config import settings
+from app.core.observability import metrics
 from app.providers.cache import triage_cache
 from app.providers.triage.factory import get_triage_provider
 
@@ -26,5 +27,6 @@ async def get_providers_metadata():
         "active_provider": getattr(active_provider, "name", settings.triage_provider),
         "engine": getattr(active_provider, "engine", "none"),
         "configured_provider": settings.triage_provider,
+        "recent_outcomes": metrics.recent_outcomes(),
         "cache": cache_stats,
     }

@@ -15,6 +15,7 @@ Design decisions:
 
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -41,6 +42,16 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,                  # explicit flush = predictable behaviour
     autocommit=False,
 )
+
+
+async def check_database_health() -> bool:
+    """Return whether PostgreSQL can execute a lightweight query."""
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+    except Exception:
+        return False
+    return True
 
 
 # ── Declarative base (shared by all ORM models) ───────────────────────────────

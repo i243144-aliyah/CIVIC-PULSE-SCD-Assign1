@@ -26,6 +26,7 @@ import time
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import ComplaintCategory, ComplaintStatus, TriagedBy
+from app.core.observability import metrics
 from app.providers.cache import triage_cache
 from app.providers.triage.base import TriageProvider, TriageResult
 from app.providers.triage.factory import get_triage_provider
@@ -91,8 +92,10 @@ class TriageService:
         cached_result = await triage_cache.get(request.text, request.location)
         if cached_result is not None:
             triage_result = cached_result
-            triaged_by_str = getattr(self._provider, "last_triaged_by", self._provider.name)
+            triaged_by_str = self._provider.name
             latency_ms = 1
+            fallback_error_class = None
+            fallback_occurred = False
             logger.info("Triage result served from Redis content-hash cache (1ms)")
         else:
             # Step 2: Execute active TriageProvider in worker thread
@@ -104,12 +107,11 @@ class TriageService:
                     request.location,
                 )
                 triaged_by_str = getattr(self._provider, "last_triaged_by", self._provider.name)
+                fallback_error_class = getattr(self._provider, "last_error_class", None)
+                fallback_occurred = triaged_by_str == "rules:fallback"
             except Exception as exc:
-                logger.warning(
-                    "TriageProvider %s raised error (%s). Falling back to RuleBasedTriage.",
-                    getattr(self._provider, "name", "unknown"),
-                    exc,
-                )
+                fallback_error_class = type(exc).__name__
+                fallback_occurred = True
                 fallback = RuleBasedTriage(name="rules:fallback")
                 triage_result = fallback.triage(request.text, request.location)
                 triaged_by_str = "rules:fallback"
@@ -141,6 +143,21 @@ class TriageService:
         }
 
         result = await self._repo.create(complaint_data)
+        metrics.observe_triage(
+            str(result.id),
+            getattr(self._provider, "name", "unknown"),
+            latency_ms,
+            fallback_occurred,
+        )
+        if fallback_occurred:
+            logger.warning(
+                "Triage fallback",
+                extra={
+                    "complaint_id": str(result.id),
+                    "provider": getattr(self._provider, "name", "unknown"),
+                    "error_class": fallback_error_class or "ProviderFallback",
+                },
+            )
         # Invalidate the /api/stats 30s cache on every new complaint
         from app.routes.stats import invalidate_stats_cache
         await invalidate_stats_cache()

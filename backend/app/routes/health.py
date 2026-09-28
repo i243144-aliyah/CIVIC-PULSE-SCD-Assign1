@@ -8,12 +8,10 @@ GET /ready   (Readiness)  → 200 only if Postgres AND Redis are both reachable.
                            Returns 503 naming the failed dependency.
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session
+from app.core.database import check_database_health
 from app.core.redis import check_redis_health
 
 router = APIRouter(tags=["Health"])
@@ -31,21 +29,13 @@ async def liveness() -> dict:
 
 @router.get("/ready", summary="Readiness probe")
 @router.get("/health/ready", summary="Readiness probe (legacy alias)")
-async def readiness(session: AsyncSession = Depends(get_session)) -> JSONResponse:
+async def readiness() -> JSONResponse:
     """
     Readiness probe.
     Returns 200 only if Postgres and Redis are both reachable.
     Returns 503 naming the failed dependency so traffic is drained.
     """
-    # 1. Check PostgreSQL
-    postgres_ok = False
-    try:
-        await session.execute(text("SELECT 1"))
-        postgres_ok = True
-    except Exception:
-        postgres_ok = False
-
-    # 2. Check Redis
+    postgres_ok = await check_database_health()
     redis_ok = await check_redis_health()
 
     if postgres_ok and redis_ok:

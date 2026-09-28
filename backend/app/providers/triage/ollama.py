@@ -51,9 +51,11 @@ class OllamaTriage:
         self.model = model
         self.name = "llm:ollama"
         self.last_triaged_by = self.name
+        self.last_error_class: str | None = None
         self.fallback = RuleBasedTriage(name="rules:fallback")
 
     def triage(self, text: str, location: str) -> TriageResult:
+        self.last_error_class = None
         attempts = 0
         max_attempts = 2
 
@@ -65,7 +67,7 @@ class OllamaTriage:
                 return result
 
             except (httpx.TimeoutException, TimeoutError) as exc:
-                logger.warning(
+                logger.debug(
                     "OllamaTriage timeout on attempt %d/%d (%s)",
                     attempts, max_attempts, type(exc).__name__
                 )
@@ -77,11 +79,11 @@ class OllamaTriage:
             except httpx.HTTPStatusError as exc:
                 code = exc.response.status_code
                 if code == 400:
-                    logger.warning("OllamaTriage 400 Client Error - non-retryable.")
+                    logger.debug("OllamaTriage 400 Client Error - non-retryable.")
                     return self._trigger_fallback(text, location, "HTTP400Error", "Bad Request")
 
                 if code == 429 or 500 <= code < 600:
-                    logger.warning("OllamaTriage HTTP %d on attempt %d/%d", code, attempts, max_attempts)
+                    logger.debug("OllamaTriage HTTP %d on attempt %d/%d", code, attempts, max_attempts)
                     if attempts < max_attempts:
                         self._apply_jitter()
                         continue
@@ -91,7 +93,7 @@ class OllamaTriage:
             except Exception as exc:
                 err_type = type(exc).__name__
                 err_str = str(exc)
-                logger.warning("OllamaTriage error on attempt %d/%d (%s: %s)", attempts, max_attempts, err_type, err_str)
+                logger.debug("OllamaTriage error on attempt %d/%d (%s: %s)", attempts, max_attempts, err_type, err_str)
                 if attempts < max_attempts:
                     self._apply_jitter()
                     continue
@@ -136,9 +138,6 @@ Complaint: {text}
         time.sleep(0.5 + random.uniform(0.1, 0.5))
 
     def _trigger_fallback(self, text: str, location: str, err_class: str, err_msg: str) -> TriageResult:
-        logger.warning(
-            "ONE WARNING: Triage fallback triggered. Provider='%s', ErrorClass='%s', Detail='%s'",
-            self.name, err_class, err_msg[:100]
-        )
         self.last_triaged_by = "rules:fallback"
+        self.last_error_class = err_class
         return self.fallback.triage(text, location)

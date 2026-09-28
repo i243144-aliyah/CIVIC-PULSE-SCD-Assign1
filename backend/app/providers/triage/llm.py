@@ -57,12 +57,14 @@ class LLMTriage:
         # rules, rules:fallback. Gemini is the backend engine; the provider tag is llm:groq.
         self.name = "llm:groq"
         self.last_triaged_by = self.name
+        self.last_error_class: str | None = None
         self.fallback = RuleBasedTriage(name="rules:fallback")
 
     def triage(self, text: str, location: str) -> TriageResult:
         """
         Execute LLM triage with timeout, retry with jitter, and automatic fallback.
         """
+        self.last_error_class = None
         attempts = 0
         max_attempts = 2  # 1 initial call + 1 retry
 
@@ -74,7 +76,7 @@ class LLMTriage:
                 return result
 
             except (httpx.TimeoutException, TimeoutError) as exc:
-                logger.warning(
+                logger.debug(
                     "LLMTriage timeout on attempt %d/%d (%s)",
                     attempts, max_attempts, type(exc).__name__
                 )
@@ -87,12 +89,12 @@ class LLMTriage:
                 status_code = exc.response.status_code
                 # Never retry client error 400 (request is bad)
                 if status_code == 400:
-                    logger.warning("LLMTriage client 400 error: non-retryable.")
+                    logger.debug("LLMTriage client 400 error: non-retryable.")
                     return self._trigger_fallback(text, location, "HTTP400Error", "Bad Request")
 
                 # Retry ONLY on 429 (Rate Limit) and 5xx (Server Error)
                 if status_code == 429 or 500 <= status_code < 600:
-                    logger.warning(
+                    logger.debug(
                         "LLMTriage HTTP %d on attempt %d/%d",
                         status_code, attempts, max_attempts
                     )
@@ -113,7 +115,7 @@ class LLMTriage:
                 is_timeout = "timeout" in err_str.lower() or "deadline" in err_str.lower()
 
                 if (is_rate_limit or is_server_error or is_timeout) and attempts < max_attempts:
-                    logger.warning("LLMTriage retryable error %s on attempt %d/%d", err_type, attempts, max_attempts)
+                    logger.debug("LLMTriage retryable error %s on attempt %d/%d", err_type, attempts, max_attempts)
                     self._apply_jitter()
                     continue
 
@@ -212,11 +214,8 @@ Complaint: {text}
 
     def _trigger_fallback(self, text: str, location: str, err_class: str, err_msg: str) -> TriageResult:
         """
-        Log structured warning (never leaking API keys) and fall back to RuleBasedTriage.
+        Record the failure class and fall back to RuleBasedTriage.
         """
-        logger.warning(
-            "ONE WARNING: Triage fallback triggered. Provider='%s', ErrorClass='%s', Detail='%s'",
-            self.name, err_class, err_msg[:100]
-        )
         self.last_triaged_by = "rules:fallback"
+        self.last_error_class = err_class
         return self.fallback.triage(text, location)
