@@ -1,44 +1,38 @@
-# backend/Dockerfile
-# ──────────────────────────────────────────────────────────────────────────────
-# Stage 1: Builder
-# ──────────────────────────────────────────────────────────────────────────────
-# Pinned to python:3.12-slim tag (replace with @sha256:... digest for the +3 bonus)
-FROM python:3.12-slim AS builder
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+  PYTHONUNBUFFERED=1 \
+  VIRTUAL_ENV=/opt/venv \
+  PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /build
+RUN python -m venv /opt/venv
 
-# Cache-friendly: copy requirements first
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+  && pip install --no-cache-dir -r requirements.txt
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Stage 2: Runtime
-# ──────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+  PYTHONUNBUFFERED=1 \
+  VIRTUAL_ENV=/opt/venv \
+  PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-# Non-root user
-RUN useradd -m -s /bin/bash appuser
-RUN chown -R appuser:appuser /app
+RUN groupadd --gid 10001 appuser \
+  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin appuser
 
-# Copy installed dependencies from builder
-COPY --from=builder /install /usr/local
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=10001:10001 app /app/app
+COPY --chown=10001:10001 alembic /app/alembic
+COPY --chown=10001:10001 alembic.ini /app/alembic.ini
 
-# Copy application source code
-COPY --chown=appuser:appuser . .
+USER 10001:10001
 
-USER appuser
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
 
-# Healthcheck
-HEALTHCHECK --interval=5s --timeout=5s --retries=10 \
-  CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-
-# Exec form CMD
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
