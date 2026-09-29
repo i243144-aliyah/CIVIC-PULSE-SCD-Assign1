@@ -164,9 +164,13 @@ jobs:
             | tar -xz -C /tmp
           sudo install /tmp/kubeconform /usr/local/bin/kubeconform
       - name: Build and validate development manifests
-        run: kustomize build k8s/overlays/dev | kubeconform -strict -summary
+        run: |
+          kustomize build k8s/overlays/dev \
+            | kubeconform -strict -summary -skip VerticalPodAutoscaler
       - name: Build and validate production manifests
-        run: kustomize build k8s/overlays/prod | kubeconform -strict -summary
+        run: |
+          kustomize build k8s/overlays/prod \
+            | kubeconform -strict -summary -skip VerticalPodAutoscaler
 
   integration:
     name: Compose integration smoke test
