@@ -4,11 +4,11 @@ on:
   push:
   pull_request:
 
-permissions: {}
-
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       TRIAGE_PROVIDER: simulated
       REDIS_URL: redis://localhost:6379/1
