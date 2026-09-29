@@ -147,7 +147,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'docker compose down -v' EXIT
 
           for attempt in {1..60}; do
             if curl --fail --silent http://localhost:8000/ready >/dev/null; then
@@ -177,6 +176,9 @@ jobs:
           curl --fail --silent --dump-header /tmp/stats-hit.headers \
             http://localhost:8000/api/stats >/tmp/stats-hit.json
           grep --quiet --ignore-case '^X-Cache: HIT' /tmp/stats-hit.headers
+      - name: Tear down Compose stack
+        if: always()
+        run: docker compose down -v
       - name: Scan frontend image
         uses: aquasecurity/trivy-action@0.28.0
         with:
