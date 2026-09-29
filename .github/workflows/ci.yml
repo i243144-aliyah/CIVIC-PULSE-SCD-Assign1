@@ -163,6 +163,8 @@ jobs:
             https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
             | tar -xz -C /tmp
           sudo install /tmp/kubeconform /usr/local/bin/kubeconform
+      - name: Build and validate development manifests
+        run: kustomize build k8s/overlays/dev | kubeconform -strict -summary
       - name: Build and validate production manifests
         run: kustomize build k8s/overlays/prod | kubeconform -strict -summary
 
