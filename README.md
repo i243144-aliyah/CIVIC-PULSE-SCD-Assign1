@@ -65,6 +65,9 @@ docker compose up -d db
 docker compose ps
 ```
 
+Ollama is available as an opt-in service. Set `TRIAGE_PROVIDER=ollama` and run
+`docker compose --profile llm up -d` to start it with the application stack.
+
 ### 4. Run database migrations
 
 ```bash

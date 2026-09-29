@@ -23,43 +23,56 @@ Rollback
 Running `alembic downgrade base` returns the DB to a pristine empty state.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql                           
+from sqlalchemy.dialects import postgresql
+
 from alembic import op
 
 # revision identifiers
 revision: str = "0001_initial"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # ── Define ENUM types using the dialect-specific postgresql.ENUM ──────────────
 # Using postgresql.ENUM with create_type=False reliably prevents the
 # _on_table_create event from firing a second CREATE TYPE during
 # op.create_table(). The types are created explicitly via op.execute().
 _complaint_category = postgresql.ENUM(
-    "water", "electricity", "sanitation",
-    "roads", "streetlights", "other",
+    "water",
+    "electricity",
+    "sanitation",
+    "roads",
+    "streetlights",
+    "other",
     name="complaint_category",
     create_type=False,
 )
 
 _complaint_priority = postgresql.ENUM(
-    "high", "normal", "low",
+    "high",
+    "normal",
+    "low",
     name="complaint_priority",
     create_type=False,
 )
 
 _complaint_status = postgresql.ENUM(
-    "open", "in_progress", "resolved", "rejected",
+    "open",
+    "in_progress",
+    "resolved",
+    "rejected",
     name="complaint_status",
     create_type=False,
 )
 
 _triaged_by = postgresql.ENUM(
-    "llm:groq", "llm:ollama", "rules", "rules:fallback",
+    "llm:groq",
+    "llm:ollama",
+    "rules",
+    "rules:fallback",
     name="triaged_by",
     create_type=False,
 )
@@ -122,7 +135,6 @@ def upgrade() -> None:
     # ─────────────────────────────────────────────────────────────────────
     op.create_table(
         "complaints",
-
         # ── Primary key ───────────────────────────────────────────────────
         # gen_random_uuid() is a PostgreSQL built-in (pg_crypto not required
         # in PG 13+); the application also sets a Python-side default for
@@ -135,7 +147,6 @@ def upgrade() -> None:
             nullable=False,
             comment="Server-generated UUID primary key.",
         ),
-
         # ── Core complaint text ────────────────────────────────────────────
         sa.Column(
             "text",
@@ -155,7 +166,6 @@ def upgrade() -> None:
             nullable=True,
             comment="Optional reporter contact (email/phone); free-form.",
         ),
-
         # ── Classification ─────────────────────────────────────────────────
         sa.Column(
             "category",
@@ -176,7 +186,6 @@ def upgrade() -> None:
             server_default="open",
             comment="Lifecycle state; defaults to 'open'.",
         ),
-
         # ── AI triage metadata ─────────────────────────────────────────────
         sa.Column(
             "ai_summary",
@@ -196,7 +205,6 @@ def upgrade() -> None:
             nullable=False,
             comment="Wall-clock triage duration in milliseconds.",
         ),
-
         # ── Timestamps (always UTC via AT TIME ZONE 'UTC') ─────────────────
         sa.Column(
             "created_at",
@@ -212,11 +220,9 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             comment="UTC last-modified timestamp; updated on each write.",
         ),
-
         # ── CHECK constraints ──────────────────────────────────────────────
         # These mirror Pydantic Field constraints so invalid data is rejected
         # at both the application layer AND the database layer.
-
         # text: 10–2000 characters
         sa.CheckConstraint(
             "char_length(text) >= 10 AND char_length(text) <= 2000",
@@ -293,7 +299,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop indexes first (implicit via DROP TABLE, but explicit for clarity)
-    op.drop_index("ix_complaints_created_at",     table_name="complaints")
+    op.drop_index("ix_complaints_created_at", table_name="complaints")
     op.drop_index("ix_complaints_status_priority", table_name="complaints")
 
     # Drop the table before the enum types it references

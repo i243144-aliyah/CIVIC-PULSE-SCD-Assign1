@@ -13,7 +13,6 @@ Implements:
 
 import json
 import logging
-import os
 import random
 import re
 import time
@@ -47,7 +46,9 @@ class OllamaTriage:
     """
 
     def __init__(self, base_url: str | None = None, model: str = "llama3.2:1b") -> None:
-        self.base_url = (base_url or settings.ollama_base_url or "http://localhost:11434").rstrip("/")
+        self.base_url = (base_url or settings.ollama_base_url or "http://localhost:11434").rstrip(
+            "/"
+        )
         self.model = model
         self.name = "llm:ollama"
         self.last_triaged_by = self.name
@@ -69,12 +70,16 @@ class OllamaTriage:
             except (httpx.TimeoutException, TimeoutError) as exc:
                 logger.debug(
                     "OllamaTriage timeout on attempt %d/%d (%s)",
-                    attempts, max_attempts, type(exc).__name__
+                    attempts,
+                    max_attempts,
+                    type(exc).__name__,
                 )
                 if attempts < max_attempts:
                     self._apply_jitter()
                     continue
-                return self._trigger_fallback(text, location, "TimeoutError", "Ollama request timed out after 10s")
+                return self._trigger_fallback(
+                    text, location, "TimeoutError", "Ollama request timed out after 10s"
+                )
 
             except httpx.HTTPStatusError as exc:
                 code = exc.response.status_code
@@ -83,7 +88,9 @@ class OllamaTriage:
                     return self._trigger_fallback(text, location, "HTTP400Error", "Bad Request")
 
                 if code == 429 or 500 <= code < 600:
-                    logger.debug("OllamaTriage HTTP %d on attempt %d/%d", code, attempts, max_attempts)
+                    logger.debug(
+                        "OllamaTriage HTTP %d on attempt %d/%d", code, attempts, max_attempts
+                    )
                     if attempts < max_attempts:
                         self._apply_jitter()
                         continue
@@ -93,13 +100,21 @@ class OllamaTriage:
             except Exception as exc:
                 err_type = type(exc).__name__
                 err_str = str(exc)
-                logger.debug("OllamaTriage error on attempt %d/%d (%s: %s)", attempts, max_attempts, err_type, err_str)
+                logger.debug(
+                    "OllamaTriage error on attempt %d/%d (%s: %s)",
+                    attempts,
+                    max_attempts,
+                    err_type,
+                    err_str,
+                )
                 if attempts < max_attempts:
                     self._apply_jitter()
                     continue
                 return self._trigger_fallback(text, location, err_type, err_str)
 
-        return self._trigger_fallback(text, location, "MaxRetriesExceeded", "All attempts exhausted")
+        return self._trigger_fallback(
+            text, location, "MaxRetriesExceeded", "All attempts exhausted"
+        )
 
     def _call_ollama(self, text: str, location: str) -> TriageResult:
         prompt = f"""{SYSTEM_PROMPT}
@@ -137,7 +152,9 @@ Complaint: {text}
     def _apply_jitter(self) -> None:
         time.sleep(0.5 + random.uniform(0.1, 0.5))
 
-    def _trigger_fallback(self, text: str, location: str, err_class: str, err_msg: str) -> TriageResult:
+    def _trigger_fallback(
+        self, text: str, location: str, err_class: str, err_msg: str
+    ) -> TriageResult:
         self.last_triaged_by = "rules:fallback"
         self.last_error_class = err_class
         return self.fallback.triage(text, location)

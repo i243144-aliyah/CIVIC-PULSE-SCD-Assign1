@@ -1,8 +1,9 @@
 import os
+
 import pytest
 
-# Direct tests to use Redis DB 1 so your local DB 0 is not wiped
-os.environ["REDIS_URL"] = "redis://localhost:6379/1"
+# Default to Redis DB 1 so your local DB 0 is not wiped; CI can supply its service URL.
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
 
 from app.core.redis import close_redis, get_redis
 

@@ -15,7 +15,7 @@ Every public method is async so it can be awaited inside an async service.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select, update
@@ -48,7 +48,7 @@ class ComplaintRepository:
         """
         complaint = Complaint(**data)
         self._session.add(complaint)
-        await self._session.flush()   # sends INSERT; ID is now populated
+        await self._session.flush()  # sends INSERT; ID is now populated
         await self._session.refresh(complaint)
         return complaint
 
@@ -64,7 +64,7 @@ class ComplaintRepository:
         stmt = (
             update(Complaint)
             .where(Complaint.id == complaint_id)
-            .values(status=new_status.value, updated_at=datetime.now(timezone.utc))
+            .values(status=new_status.value, updated_at=datetime.now(UTC))
             .returning(Complaint)
         )
         result = await self._session.execute(stmt)
@@ -112,8 +112,7 @@ class ComplaintRepository:
 
         # Data query – ordered newest first, then paginated
         data_stmt = (
-            base_stmt
-            .order_by(Complaint.created_at.desc())
+            base_stmt.order_by(Complaint.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -134,7 +133,6 @@ class ComplaintRepository:
         Returns a dict ready to be JSON-serialised for GET /api/stats.
         Uses a single SQL pass (FILTER clauses) so it never table-scans twice.
         """
-        from sqlalchemy import case, literal
 
         total_stmt = select(
             func.count().label("total"),

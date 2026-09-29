@@ -12,6 +12,7 @@ Key design points:
      (runs migrations against a live DB).
   4. NEVER calls Base.metadata.create_all() — only Alembic DDL operations.
 """
+
 import sys
 from pathlib import Path
 
@@ -43,8 +44,8 @@ if config.config_file_name is not None:
 
 # ── Import all models so Base.metadata is fully populated ─────────────────────
 # This import MUST happen before `target_metadata` is assigned.
-from app.core.database import Base  # noqa: E402
 import app.models  # noqa: E402, F401 – side effect: registers all ORM models
+from app.core.database import Base  # noqa: E402
 
 target_metadata = Base.metadata
 

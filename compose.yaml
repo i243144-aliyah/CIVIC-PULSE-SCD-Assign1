@@ -47,8 +47,6 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
     networks:
       - edge
       - internal
@@ -88,6 +86,8 @@ services:
       - internal
 
   ollama:
+    profiles:
+      - llm
     image: ollama/ollama:latest
     volumes:
       - ollama_models:/root/.ollama

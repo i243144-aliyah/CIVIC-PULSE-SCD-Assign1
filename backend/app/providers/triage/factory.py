@@ -30,7 +30,11 @@ def get_triage_provider(provider_name: str | None = None, **kwargs: Any) -> Tria
     TriageProvider
         An instance implementing the TriageProvider protocol.
     """
-    name = (provider_name or os.getenv("TRIAGE_PROVIDER") or settings.triage_provider or "rules").lower().strip()
+    name = (
+        (provider_name or os.getenv("TRIAGE_PROVIDER") or settings.triage_provider or "rules")
+        .lower()
+        .strip()
+    )
 
     if name in {"llm", "llmtriage", "groq", "gemini"}:
         return LLMTriage(**kwargs)
@@ -42,5 +46,6 @@ def get_triage_provider(provider_name: str | None = None, **kwargs: Any) -> Tria
         return SimulatedTriage(**kwargs)
     else:
         raise ValueError(
-            f"Unknown TRIAGE_PROVIDER '{name}'. Supported values: 'llm', 'ollama', 'rules', 'simulated'."
+            f"Unknown TRIAGE_PROVIDER '{name}'. "
+            "Supported values: 'llm', 'ollama', 'rules', 'simulated'."
         )

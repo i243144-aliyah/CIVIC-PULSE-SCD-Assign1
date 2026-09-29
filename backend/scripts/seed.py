@@ -33,8 +33,10 @@ from __future__ import annotations
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+
+from sqlalchemy import create_engine, text
 
 # ── Make `app` importable when running from project root ─────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,10 +48,9 @@ except ImportError:
     def load_dotenv() -> bool:
         return False
 
+
 load_dotenv()
 
-import sqlalchemy as sa
-from sqlalchemy import create_engine, text
 
 # ── Seed namespace UUID (stable across runs) ──────────────────────────────────
 # Any fixed UUID can serve as the namespace; this one is project-specific.
@@ -582,20 +583,20 @@ for _c in SEED_COMPLAINTS:
 
 def _build_insert_row(complaint: dict, seed_id: uuid.UUID) -> dict:
     """Build a flat dict ready for INSERT matching the complaints table schema."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return {
-        "id":                str(seed_id),
-        "text":              complaint["text"].strip(),
-        "location":          complaint["location"],
-        "reporter_contact":  complaint.get("reporter_contact"),
-        "category":          complaint["category"],
-        "priority":          complaint["priority"],
-        "status":            complaint["status"],
-        "ai_summary":        complaint.get("ai_summary"),
-        "triaged_by":        complaint["triaged_by"],
+        "id": str(seed_id),
+        "text": complaint["text"].strip(),
+        "location": complaint["location"],
+        "reporter_contact": complaint.get("reporter_contact"),
+        "category": complaint["category"],
+        "priority": complaint["priority"],
+        "status": complaint["status"],
+        "ai_summary": complaint.get("ai_summary"),
+        "triaged_by": complaint["triaged_by"],
         "triage_latency_ms": complaint["triage_latency_ms"],
-        "created_at":        now,
-        "updated_at":        now,
+        "created_at": now,
+        "updated_at": now,
     }
 
 
@@ -615,11 +616,9 @@ def run_seed(database_url: str | None = None) -> None:
         or os.environ.get("DATABASE_URL", "").replace("+asyncpg", "+psycopg2")
     )
     if not url:
-        raise RuntimeError(
-            "No database URL found.  Set DATABASE_SYNC_URL in your .env file."
-        )
+        raise RuntimeError("No database URL found.  Set DATABASE_SYNC_URL in your .env file.")
 
-    print(f"[seed] Connecting to database …")
+    print("[seed] Connecting to database …")
     engine = create_engine(url, echo=False)
 
     inserted = 0

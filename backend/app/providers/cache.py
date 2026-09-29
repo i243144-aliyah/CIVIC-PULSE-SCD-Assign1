@@ -11,7 +11,6 @@ Requirements:
 """
 
 import hashlib
-import json
 import logging
 from typing import Any
 
@@ -35,7 +34,7 @@ def compute_content_hash(text: str, location: str) -> str:
     """
     norm_text = " ".join(text.lower().split())
     norm_loc = " ".join(location.lower().split())
-    payload = f"{norm_loc}::{norm_text}".encode("utf-8")
+    payload = f"{norm_loc}::{norm_text}".encode()
     return hashlib.sha256(payload).hexdigest()
 
 
@@ -133,8 +132,8 @@ class TriageCache:
         try:
             redis = get_redis()
             await redis.delete(STATS_HITS_KEY, STATS_MISSES_KEY)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not reset Redis stats: %s", exc)
         self._memory_hits = 0
         self._memory_misses = 0
 

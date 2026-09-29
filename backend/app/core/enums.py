@@ -11,42 +11,46 @@ These are the *single source of truth* for enum values used by:
 Import from here; never redeclare enum values elsewhere.
 """
 
-import enum
+from enum import StrEnum
 
 
-class ComplaintCategory(str, enum.Enum):
+class ComplaintCategory(StrEnum):
     """Civic service domain the complaint belongs to."""
-    water        = "water"
-    electricity  = "electricity"
-    sanitation   = "sanitation"
-    roads        = "roads"
+
+    water = "water"
+    electricity = "electricity"
+    sanitation = "sanitation"
+    roads = "roads"
     streetlights = "streetlights"
-    other        = "other"
+    other = "other"
 
 
-class ComplaintPriority(str, enum.Enum):
+class ComplaintPriority(StrEnum):
     """Triage-assigned urgency level."""
-    high   = "high"
+
+    high = "high"
     normal = "normal"
-    low    = "low"
+    low = "low"
 
 
-class ComplaintStatus(str, enum.Enum):
+class ComplaintStatus(StrEnum):
     """Lifecycle state of a complaint."""
-    open        = "open"
+
+    open = "open"
     in_progress = "in_progress"
-    resolved    = "resolved"
-    rejected    = "rejected"
+    resolved = "resolved"
+    rejected = "rejected"
 
 
-class TriagedBy(str, enum.Enum):
+class TriagedBy(StrEnum):
     """
     Identifies which triage engine processed the complaint.
 
     Values use a colon-separated namespace so the UI / analytics can
     easily group by engine type (llm vs rules) independent of the model.
     """
-    llm_groq       = "llm:groq"
-    llm_ollama     = "llm:ollama"
-    rules          = "rules"
+
+    llm_groq = "llm:groq"
+    llm_ollama = "llm:ollama"
+    rules = "rules"
     rules_fallback = "rules:fallback"

@@ -1,24 +1,8 @@
 # CivicPulse Deployment Runbook
 
-## Fast imperative rollback
-
-Use this when the immediate priority is restoring the previous ReplicaSet while
-the incident is active. The command is intentionally short enough to be the
-3 a.m. answer:
-
-```sh
-kubectl rollout undo deployment/backend -n civicpulse
-kubectl rollout status deployment/backend -n civicpulse --timeout=180s
-kubectl get pods -n civicpulse -l app.kubernetes.io/name=backend
-```
-
-Repeat the same commands for `deployment/frontend` if the frontend release is
-also affected. Record the incident number, operator, timestamp, and resulting
-image digest after service is restored.
-
 ## Declarative rollback
 
-Use this for the auditable answer. Re-apply the production overlay with the
+Use this declarative rollback path to restore the production overlay to the
 previous immutable SHA so the desired state in Git and the cluster agree.
 
 ```sh
@@ -42,17 +26,16 @@ has an auditable Git history.
 
 ## Verification
 
-After either rollback, verify readiness and the public route:
+After the declarative rollback, verify readiness and the public route:
 
 ```sh
 kubectl get pods -n civicpulse
 kubectl get hpa -n civicpulse
 kubectl rollout history deployment/backend -n civicpulse
-curl --fail --header 'Host: civicpulse.example.com' https://<ingress-address>/health
+  curl --fail --header 'Host: civicpulse.example.com' https://<ingress-address>/api/meta/providers
 ```
 
-If the imperative rollback resolves the incident, follow up with the
-declarative rollback before closing it. Preserve the failed SHA, restored SHA,
+Preserve the failed SHA, restored SHA,
 kubectl output, and smoke-test result in the incident record.
 
 ## Troubleshooting matrix

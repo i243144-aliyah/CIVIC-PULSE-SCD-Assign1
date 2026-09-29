@@ -28,18 +28,18 @@ from app.core.config import settings
 # ── Engine ────────────────────────────────────────────────────────────────────
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.app_debug,          # logs SQL only in debug mode
-    pool_pre_ping=True,               # validates connection health before use
-    pool_size=10,                     # sensible default for a single-instance app
-    max_overflow=20,                  # burst headroom above pool_size
+    echo=settings.app_debug,  # logs SQL only in debug mode
+    pool_pre_ping=True,  # validates connection health before use
+    pool_size=10,  # sensible default for a single-instance app
+    max_overflow=20,  # burst headroom above pool_size
 )
 
 # ── Session factory ───────────────────────────────────────────────────────────
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False,           # avoids lazy-load errors after commit
-    autoflush=False,                  # explicit flush = predictable behaviour
+    expire_on_commit=False,  # avoids lazy-load errors after commit
+    autoflush=False,  # explicit flush = predictable behaviour
     autocommit=False,
 )
 
@@ -57,6 +57,7 @@ async def check_database_health() -> bool:
 # ── Declarative base (shared by all ORM models) ───────────────────────────────
 class Base(DeclarativeBase):
     """All SQLAlchemy ORM models must inherit from this class."""
+
     pass
 
 

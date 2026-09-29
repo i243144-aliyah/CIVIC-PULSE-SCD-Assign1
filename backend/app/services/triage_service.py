@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import ComplaintCategory, ComplaintStatus, TriagedBy
 from app.core.observability import metrics
 from app.providers.cache import triage_cache
-from app.providers.triage.base import TriageProvider, TriageResult
+from app.providers.triage.base import TriageProvider
 from app.providers.triage.factory import get_triage_provider
 from app.providers.triage.rules import RuleBasedTriage
 from app.repositories.complaint_repository import ComplaintRepository
@@ -38,10 +38,10 @@ logger = logging.getLogger(__name__)
 
 # ── Valid status transitions ──────────────────────────────────────────────────
 _VALID_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
-    ComplaintStatus.open:        {ComplaintStatus.in_progress, ComplaintStatus.rejected},
+    ComplaintStatus.open: {ComplaintStatus.in_progress, ComplaintStatus.rejected},
     ComplaintStatus.in_progress: {ComplaintStatus.resolved, ComplaintStatus.rejected},
-    ComplaintStatus.resolved:    set(),   # terminal
-    ComplaintStatus.rejected:    set(),   # terminal
+    ComplaintStatus.resolved: set(),  # terminal
+    ComplaintStatus.rejected: set(),  # terminal
 }
 
 
@@ -59,6 +59,7 @@ class InvalidStatusTransitionError(Exception):
 
 class ComplaintNotFoundError(Exception):
     """Raised when a complaint ID does not exist in the database."""
+
     pass
 
 
@@ -75,6 +76,11 @@ class TriageService:
     ) -> None:
         self._repo = repo or (ComplaintRepository(session) if session is not None else None)
         self._provider = provider or get_triage_provider()
+
+    def _get_repository(self) -> ComplaintRepository:
+        if self._repo is None:
+            raise RuntimeError("Complaint persistence requires a database session or repository.")
+        return self._repo
 
     # ── Triage & creation ─────────────────────────────────────────────────
 
@@ -131,18 +137,18 @@ class TriageService:
         )
 
         complaint_data = {
-            "text":              request.text,
-            "location":          request.location,
-            "reporter_contact":  request.reporter_contact,
-            "category":          category_val,
-            "priority":          triage_result.priority.value,
-            "status":            ComplaintStatus.open.value,
-            "ai_summary":        triage_result.summary,
-            "triaged_by":        db_triaged_by,
+            "text": request.text,
+            "location": request.location,
+            "reporter_contact": request.reporter_contact,
+            "category": category_val,
+            "priority": triage_result.priority.value,
+            "status": ComplaintStatus.open.value,
+            "ai_summary": triage_result.summary,
+            "triaged_by": db_triaged_by,
             "triage_latency_ms": latency_ms,
         }
 
-        result = await self._repo.create(complaint_data)
+        result = await self._get_repository().create(complaint_data)
         metrics.observe_triage(
             str(result.id),
             getattr(self._provider, "name", "unknown"),
@@ -160,6 +166,7 @@ class TriageService:
             )
         # Invalidate the /api/stats 30s cache on every new complaint
         from app.routes.stats import invalidate_stats_cache
+
         await invalidate_stats_cache()
         return result
 
@@ -183,7 +190,7 @@ class TriageService:
         """
         Apply a status transition after validating against the state machine.
         """
-        complaint = await self._repo.get_by_id(complaint_id)
+        complaint = await self._get_repository().get_by_id(complaint_id)
         if complaint is None:
             raise ComplaintNotFoundError(f"Complaint {complaint_id} not found.")
 
@@ -193,16 +200,17 @@ class TriageService:
         if new_status not in allowed:
             raise InvalidStatusTransitionError(current_status, new_status)
 
-        result = await self._repo.update_status(complaint_id, new_status)
+        result = await self._get_repository().update_status(complaint_id, new_status)
         # Invalidate the /api/stats 30s cache on status changes
         from app.routes.stats import invalidate_stats_cache
+
         await invalidate_stats_cache()
         return result
 
     # ── Queries ───────────────────────────────────────────────────────────
 
     async def get_complaint(self, complaint_id):
-        complaint = await self._repo.get_by_id(complaint_id)
+        complaint = await self._get_repository().get_by_id(complaint_id)
         if complaint is None:
             raise ComplaintNotFoundError(f"Complaint {complaint_id} not found.")
         return complaint
@@ -216,7 +224,7 @@ class TriageService:
         page: int = 1,
         page_size: int = 20,
     ):
-        return await self._repo.list_complaints(
+        return await self._get_repository().list_complaints(
             status=status,
             category=category,
             priority=priority,
