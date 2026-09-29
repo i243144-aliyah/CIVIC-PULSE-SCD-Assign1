@@ -115,6 +115,11 @@ jobs:
         uses: helm/kind-action@v1.12.0
         with:
           cluster_name: civicpulse
+      - name: Install nginx ingress controller
+        run: |
+          kubectl apply --filename https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
+          kubectl wait --namespace ingress-nginx --for=condition=Ready pod \
+            --selector=app.kubernetes.io/component=controller --timeout=180s
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -134,6 +139,8 @@ jobs:
             --docker-username="${GITHUB_ACTOR}" \
             --docker-password="${{ secrets.GITHUB_TOKEN }}" \
             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl patch serviceaccount default --namespace civicpulse \
+            --type merge --patch '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
       - name: Apply immutable production manifests
         working-directory: k8s/overlays/prod
         run: |
@@ -143,3 +150,16 @@ jobs:
           kubectl apply -k .
           kubectl -n civicpulse rollout status deployment/backend --timeout=180s
           kubectl -n civicpulse rollout status deployment/frontend --timeout=180s
+      - name: Smoke test through Ingress and print autoscaling state
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent --header 'Host: civicpulse.example.com' http://127.0.0.1/health >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              kubectl get ingress --namespace civicpulse
+              exit 1
+            fi
+            sleep 2
+          done
+          kubectl get hpa --namespace civicpulse
