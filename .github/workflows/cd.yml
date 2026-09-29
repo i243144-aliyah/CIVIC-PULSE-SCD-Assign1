@@ -54,6 +54,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+      actions: write
+    outputs:
+      backend-digest: ${{ steps.backend.outputs.digest }}
+      frontend-digest: ${{ steps.frontend.outputs.digest }}
     env:
       REGISTRY: ghcr.io
       IMAGE_NAMESPACE: ghcr.io/${{ github.repository }}
@@ -83,3 +87,15 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:${{ github.sha }}
             ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:latest
+      - name: Emit backend SBOM
+        uses: anchore/sbom-action@v0.17.0
+        with:
+          image: ${{ env.IMAGE_NAMESPACE }}/civicpulse-backend:${{ github.sha }}
+          artifact-name: civicpulse-backend-${{ github.sha }}.spdx.json
+          output-file: civicpulse-backend-${{ github.sha }}.spdx.json
+      - name: Emit frontend SBOM
+        uses: anchore/sbom-action@v0.17.0
+        with:
+          image: ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:${{ github.sha }}
+          artifact-name: civicpulse-frontend-${{ github.sha }}.spdx.json
+          output-file: civicpulse-frontend-${{ github.sha }}.spdx.json
