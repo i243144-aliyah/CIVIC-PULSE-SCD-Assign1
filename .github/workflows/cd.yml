@@ -155,8 +155,8 @@ jobs:
             backend=${IMAGE_NAMESPACE}/civicpulse-backend:${{ github.sha }} \
             frontend=${IMAGE_NAMESPACE}/civicpulse-frontend:${{ github.sha }}
           kubectl apply -k .
-          kubectl -n civicpulse rollout status deployment/backend --timeout=180s
-          kubectl -n civicpulse rollout status deployment/frontend --timeout=180s
+          kubectl -n civicpulse rollout status deployment/backend --timeout=120s
+          kubectl -n civicpulse rollout status deployment/frontend --timeout=120s
       - name: Smoke test through Ingress and print autoscaling state
         run: |
           for attempt in {1..60}; do
@@ -170,3 +170,4 @@ jobs:
             sleep 2
           done
           kubectl get hpa --namespace civicpulse
+          kubectl get vpa --namespace civicpulse
