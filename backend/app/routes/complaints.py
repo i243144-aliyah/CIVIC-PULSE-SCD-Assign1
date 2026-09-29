@@ -114,7 +114,7 @@ async def get_complaint(
     try:
         complaint = await service.get_complaint(complaint_id)
     except ComplaintNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
     return ComplaintResponse.model_validate(complaint)
 
 
@@ -137,10 +137,10 @@ async def update_complaint_status(
     try:
         complaint = await service.update_status(complaint_id, body.status)
     except ComplaintNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from None
     except InvalidStatusTransitionError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
-        ) from exc
+        ) from None
     return ComplaintResponse.model_validate(complaint)
