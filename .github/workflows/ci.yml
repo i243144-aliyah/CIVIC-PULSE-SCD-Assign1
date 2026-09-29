@@ -113,9 +113,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
-        run: docker build --tag civicpulse-backend:${{ github.sha }} ./backend
+        run: docker build --pull --file backend/Dockerfile --tag civicpulse-backend:${{ github.sha }} ./backend
       - name: Build frontend image
-        run: docker build --tag civicpulse-frontend:${{ github.sha }} ./frontend
+        run: docker build --pull --file frontend/Dockerfile --tag civicpulse-frontend:${{ github.sha }} ./frontend
 
   scan:
     name: Scan container images
