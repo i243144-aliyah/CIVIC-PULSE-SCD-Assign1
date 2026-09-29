@@ -5,7 +5,9 @@ on:
     branches:
       - main
 
-permissions: {}
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   test:
@@ -49,14 +51,13 @@ jobs:
         run: npm test -- --passWithNoTests=false
         working-directory: frontend
 
-  build-push:
+  build-and-push:
     name: Build and publish images
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      actions: write
     outputs:
       backend-digest: ${{ steps.backend.outputs.digest }}
       frontend-digest: ${{ steps.frontend.outputs.digest }}
@@ -101,10 +102,14 @@ jobs:
           image: ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:${{ github.sha }}
           artifact-name: civicpulse-frontend-${{ github.sha }}.spdx.json
           output-file: civicpulse-frontend-${{ github.sha }}.spdx.json
+      - name: Print image digests
+        run: |
+          echo "backend digest: ${{ steps.backend.outputs.digest }}"
+          echo "frontend digest: ${{ steps.frontend.outputs.digest }}"
 
-  deploy-k8s:
+  deploy-kind:
     name: Deploy to Kubernetes
-    needs: build-push
+    needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -150,8 +155,8 @@ jobs:
             backend=${IMAGE_NAMESPACE}/civicpulse-backend:${{ github.sha }} \
             frontend=${IMAGE_NAMESPACE}/civicpulse-frontend:${{ github.sha }}
           kubectl apply -k .
-          kubectl -n civicpulse rollout status deployment/backend --timeout=180s
-          kubectl -n civicpulse rollout status deployment/frontend --timeout=180s
+          kubectl -n civicpulse rollout status deployment/backend --timeout=120s
+          kubectl -n civicpulse rollout status deployment/frontend --timeout=120s
       - name: Smoke test through Ingress and print autoscaling state
         run: |
           for attempt in {1..60}; do
@@ -165,3 +170,4 @@ jobs:
             sleep 2
           done
           kubectl get hpa --namespace civicpulse
+          kubectl get vpa --namespace civicpulse
