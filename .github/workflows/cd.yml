@@ -46,3 +46,40 @@ jobs:
       - name: Run frontend suite
         run: npm test -- --passWithNoTests=false
         working-directory: frontend
+
+  build-push:
+    name: Build and publish images
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAMESPACE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend
+        id: backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAMESPACE }}/civicpulse-backend:${{ github.sha }}
+            ${{ env.IMAGE_NAMESPACE }}/civicpulse-backend:latest
+      - name: Build and push frontend
+        id: frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:${{ github.sha }}
+            ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:latest
