@@ -132,8 +132,11 @@ class TriageCache:
         try:
             redis = get_redis()
             await redis.delete(STATS_HITS_KEY, STATS_MISSES_KEY)
-        except Exception as exc:
-            logger.debug("Could not reset Redis stats: %s", exc)
+        except (RedisError, ConnectionError, OSError):
+            logger.debug(
+                "Unable to reset Redis triage-cache statistics",
+                exc_info=True,
+            )
         self._memory_hits = 0
         self._memory_misses = 0
 

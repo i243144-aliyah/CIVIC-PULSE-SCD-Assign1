@@ -147,7 +147,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "resolved",
         "triaged_by": "rules",
         "triage_latency_ms": 6,
-        "ai_summary": "Broken public fountain in Jubilee Park needs repair; serves joggers and children.",
+        "ai_summary": (
+            "Broken public fountain in Jubilee Park needs repair; "
+            # Keep adjacent literals split for the configured line limit.
+            "serves joggers and children."
+        ),
     },
     {
         "index": 6,
@@ -163,7 +167,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules:fallback",
         "triage_latency_ms": 5,
-        "ai_summary": "Multiple irrigation pipe leaks waterlogging allotment plots on Greenfield Lane.",
+        "ai_summary": (
+            "Multiple irrigation pipe leaks waterlogging allotment plots "
+            # Keep adjacent literals split for the configured line limit.
+            "on Greenfield Lane."
+        ),
     },
     # ── ELECTRICITY (5) ───────────────────────────────────────────────────
     {
@@ -181,7 +189,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "in_progress",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 917,
-        "ai_summary": "Dangling live wires at head height after storm on Maple Road; urgent hazard.",
+        "ai_summary": (
+            "Dangling live wires at head height after storm on Maple Road; "
+            # Keep adjacent literals split for the configured line limit.
+            "urgent hazard."
+        ),
     },
     {
         "index": 8,
@@ -197,7 +209,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 9,
-        "ai_summary": "Three-day intermittent power outage on Victoria Terrace affecting clinic and homes.",
+        "ai_summary": (
+            "Three-day intermittent power outage on Victoria Terrace "
+            # Keep adjacent literals split for the configured line limit.
+            "affecting clinic and homes."
+        ),
     },
     {
         "index": 9,
@@ -213,7 +229,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 788,
-        "ai_summary": "Sparking substation near school entrance on Park Lane poses child safety risk.",
+        "ai_summary": (
+            "Sparking substation near school entrance on Park Lane "
+            # Keep adjacent literals split for the configured line limit.
+            "poses child safety risk."
+        ),
     },
     {
         "index": 10,
@@ -246,7 +266,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "rejected",
         "triaged_by": "rules",
         "triage_latency_ms": 7,
-        "ai_summary": "Weather-damaged meter box at community centre poses shock risk in wet conditions.",
+        "ai_summary": (
+            "Weather-damaged meter box at community centre poses shock "
+            # Keep adjacent literals split for the configured line limit.
+            "risk in wet conditions."
+        ),
     },
     # ── SANITATION (5) ────────────────────────────────────────────────────
     {
@@ -264,7 +288,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "in_progress",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 1102,
-        "ai_summary": "Raw sewage overflow on Birch Street reaching school playground; public health risk.",
+        "ai_summary": (
+            "Raw sewage overflow on Birch Street reaching school playground; "
+            # Keep adjacent literals split for the configured line limit.
+            "public health risk."
+        ),
     },
     {
         "index": 13,
@@ -280,7 +308,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 10,
-        "ai_summary": "Overflowing bins on High Street for 10 days attracting pests and deterring shoppers.",
+        "ai_summary": (
+            "Overflowing bins on High Street for 10 days attracting pests "
+            # Keep adjacent literals split for the configured line limit.
+            "and deterring shoppers."
+        ),
     },
     {
         "index": 14,
@@ -313,7 +345,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "resolved",
         "triaged_by": "llm:ollama",
         "triage_latency_ms": 4561,
-        "ai_summary": "Central Market toilets out of order for 2 weeks; no accessible facilities for disabled.",
+        "ai_summary": (
+            "Central Market toilets out of order for 2 weeks; no accessible "
+            # Keep adjacent literals split for the configured line limit.
+            "facilities for disabled."
+        ),
     },
     {
         "index": 16,
@@ -329,7 +365,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 8,
-        "ai_summary": "Blocked drainage causing flooding in Station Road underpass; impassable in rain.",
+        "ai_summary": (
+            "Blocked drainage causing flooding in Station Road underpass; "
+            # Keep adjacent literals split for the configured line limit.
+            "impassable in rain."
+        ),
     },
     # ── ROADS (6) ─────────────────────────────────────────────────────────
     {
@@ -347,7 +387,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 15,
-        "ai_summary": "Deep pothole on A40 bypass approach causing tyre blow-outs; high-speed traffic risk.",
+        "ai_summary": (
+            "Deep pothole on A40 bypass approach causing tyre blow-outs; "
+            # Keep adjacent literals split for the configured line limit.
+            "high-speed traffic risk."
+        ),
     },
     {
         "index": 18,
@@ -364,7 +408,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "in_progress",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 956,
-        "ai_summary": "One-metre sinkhole on Fountain Square; delivery van near-miss; urgent barriers needed.",
+        "ai_summary": (
+            "One-metre sinkhole on Fountain Square; delivery van near-miss; "
+            # Keep adjacent literals split for the configured line limit.
+            "urgent barriers needed."
+        ),
     },
     {
         "index": 19,
@@ -381,7 +429,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 11,
-        "ai_summary": "Faded pedestrian crossing markings near primary school; near-misses at school run.",
+        "ai_summary": (
+            "Faded pedestrian crossing markings near primary school; "
+            # Keep adjacent literals split for the configured line limit.
+            "near-misses at school run."
+        ),
     },
     {
         "index": 20,
@@ -397,7 +449,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 7,
-        "ai_summary": "Subsided speed bumps on Orchard Lane no longer effective; speeding has returned.",
+        "ai_summary": (
+            "Subsided speed bumps on Orchard Lane no longer effective; "
+            # Keep adjacent literals split for the configured line limit.
+            "speeding has returned."
+        ),
     },
     {
         "index": 21,
@@ -414,7 +470,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 1034,
-        "ai_summary": "Lifted paving slabs on Library Walk causing trips; one wrist injury reported last week.",
+        "ai_summary": (
+            "Lifted paving slabs on Library Walk causing trips; one wrist "
+            # Keep adjacent literals split for the configured line limit.
+            "injury reported last week."
+        ),
     },
     {
         "index": 22,
@@ -430,7 +490,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 9,
-        "ai_summary": "Pothole at Whitmore Court car park entrance scraping vehicles for three months.",
+        "ai_summary": (
+            "Pothole at Whitmore Court car park entrance scraping vehicles "
+            # Keep adjacent literals split for the configured line limit.
+            "for three months."
+        ),
     },
     # ── STREETLIGHTS (5) ──────────────────────────────────────────────────
     {
@@ -448,7 +512,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 8,
-        "ai_summary": "All six streetlights on Pine Avenue out for 5 nights; safety concern near crime alley.",
+        "ai_summary": (
+            "All six streetlights on Pine Avenue out for 5 nights; safety "
+            # Keep adjacent literals split for the configured line limit.
+            "concern near crime alley."
+        ),
     },
     {
         "index": 24,
@@ -465,7 +533,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "in_progress",
         "triaged_by": "rules",
         "triage_latency_ms": 6,
-        "ai_summary": "Flickering streetlight on Ash Road causing distress to photosensitive residents.",
+        "ai_summary": (
+            "Flickering streetlight on Ash Road causing distress to "
+            # Keep adjacent literals split for the configured line limit.
+            "photosensitive residents."
+        ),
     },
     {
         "index": 25,
@@ -482,7 +554,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 7,
-        "ai_summary": "Three streetlights failed on Level 2 of Mill Street car park; area unlit at night.",
+        "ai_summary": (
+            "Three streetlights failed on Level 2 of Mill Street car park; "
+            # Keep adjacent literals split for the configured line limit.
+            "area unlit at night."
+        ),
     },
     {
         "index": 26,
@@ -499,7 +575,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 873,
-        "ai_summary": "Vehicle-struck streetlight column leaning 45° on Harbour Road; collapse risk.",
+        "ai_summary": (
+            "Vehicle-struck streetlight column leaning 45° on Harbour Road; "
+            # Keep adjacent literals split for the configured line limit.
+            "collapse risk."
+        ),
     },
     {
         "index": 27,
@@ -534,7 +614,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "open",
         "triaged_by": "rules",
         "triage_latency_ms": 6,
-        "ai_summary": "Vandalised park bench near duck pond in Manor Park; only seating for elderly visitors.",
+        "ai_summary": (
+            "Vandalised park bench near duck pond in Manor Park; only seating "
+            # Keep adjacent literals split for the configured line limit.
+            "for elderly visitors."
+        ),
     },
     {
         "index": 29,
@@ -568,7 +652,11 @@ SEED_COMPLAINTS: list[dict] = [
         "status": "in_progress",
         "triaged_by": "llm:groq",
         "triage_latency_ms": 791,
-        "ai_summary": "Overhanging split tree branch over pavement on Poplar Avenue; imminent fall risk.",
+        "ai_summary": (
+            "Overhanging split tree branch over pavement on Poplar Avenue; "
+            # Keep adjacent literals split for the configured line limit.
+            "imminent fall risk."
+        ),
     },
 ]
 
