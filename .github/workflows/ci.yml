@@ -87,3 +87,13 @@ jobs:
       - name: Run Vitest suite
         run: npm test -- --passWithNoTests=false
         working-directory: frontend
+
+  build:
+    name: Build container images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build --tag civicpulse-backend:${{ github.sha }} ./backend
+      - name: Build frontend image
+        run: docker build --tag civicpulse-frontend:${{ github.sha }} ./frontend
