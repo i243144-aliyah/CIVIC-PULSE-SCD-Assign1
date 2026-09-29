@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: civicpulse
+resources:
+  - ../../base
+images:
+  - name: backend
+    newName: ghcr.io/replace-me/civicpulse-backend
+    newTag: replace-me
+  - name: frontend
+    newName: ghcr.io/replace-me/civicpulse-frontend
+    newTag: replace-me
+patches:
+  - path: ingress-host-patch.yaml
+    target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: civicpulse

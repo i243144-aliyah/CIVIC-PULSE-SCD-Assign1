@@ -1,0 +1,19 @@
+Name:         backend
+Namespace:    civicpulse
+Labels:       app.kubernetes.io/part-of=civicpulse
+Annotations:  <none>
+API Version:  autoscaling.k8s.io/v1
+Kind:         VerticalPodAutoscaler
+Metadata:
+  Creation Timestamp:  2026-09-28T14:21:25Z
+  Generation:          1
+  Resource Version:    1023
+  UID:                 974210f2-77e4-478a-8371-e78d98b24a31
+Spec:
+  Target Ref:
+    API Version:  apps/v1
+    Kind:         Deployment
+    Name:         backend
+  Update Policy:
+    Update Mode:  Off
+Events:           <none>

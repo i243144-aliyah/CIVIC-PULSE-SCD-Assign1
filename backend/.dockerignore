@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+.env
+.pytest_cache
+.coverage
+.coverage.*
+htmlcov
+coverage.xml
+tests
+test-results
+docs
+scripts
+*.log
