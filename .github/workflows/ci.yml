@@ -115,6 +115,24 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
+
+  manifests:
+    name: Validate Kubernetes manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize and kubeconform
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz \
+            | tar -xz -C /tmp
+          sudo install /tmp/kustomize /usr/local/bin/kustomize
+          curl --fail --silent --show-error --location \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /tmp
+          sudo install /tmp/kubeconform /usr/local/bin/kubeconform
+      - name: Build and validate production manifests
+        run: kustomize build k8s/overlays/prod | kubeconform -strict -summary
       - name: Scan frontend image
         uses: aquasecurity/trivy-action@0.28.0
         with:
