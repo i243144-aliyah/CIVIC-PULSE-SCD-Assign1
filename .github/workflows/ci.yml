@@ -134,6 +134,7 @@ jobs:
         with:
           image-ref: civicpulse-backend:${{ github.sha }}
           severity: HIGH,CRITICAL
+          vuln-type: os,library
           exit-code: "1"
           ignore-unfixed: true
       - name: Scan frontend image
@@ -141,6 +142,7 @@ jobs:
         with:
           image-ref: civicpulse-frontend:${{ github.sha }}
           severity: HIGH,CRITICAL
+          vuln-type: os,library
           exit-code: "1"
           ignore-unfixed: true
 
