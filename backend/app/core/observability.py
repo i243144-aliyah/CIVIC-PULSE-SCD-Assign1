@@ -91,8 +91,8 @@ class ApplicationMetrics:
             cumulative += histogram["buckets"][index]
             lines.append(f'{name}_bucket{{le="{upper_bound:g}"}} {cumulative}')
         lines.append(f'{name}_bucket{{le="+Inf"}} {histogram["count"]}')
-        lines.append(f'{name}_sum {histogram["sum"]:.6f}')
-        lines.append(f'{name}_count {histogram["count"]}')
+        lines.append(f"{name}_sum {histogram['sum']:.6f}")
+        lines.append(f"{name}_count {histogram['count']}")
 
 
 metrics = ApplicationMetrics()

@@ -74,16 +74,12 @@ class GroqProvider:
         """
         import json  # lazy import – avoids cost when not used
 
-        user_message = (
-            f"Category: {category.value}\n"
-            f"Location: {location}\n"
-            f"Complaint: {text}"
-        )
+        user_message = f"Category: {category.value}\nLocation: {location}\nComplaint: {text}"
         payload = {
             "model": _MODEL,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user",   "content": user_message},
+                {"role": "user", "content": user_message},
             ],
             "temperature": 0.1,
             "max_tokens": 100,
@@ -92,7 +88,7 @@ class GroqProvider:
 
         t0 = time.monotonic()
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            response = client.post(  # type: ignore[assignment]
+            response = await client.post(
                 _GROQ_API_URL,
                 json=payload,
                 headers={
@@ -101,10 +97,10 @@ class GroqProvider:
                 },
             )
             # Raise on 4xx/5xx
-            response.raise_for_status()  # type: ignore[union-attr]
+            response.raise_for_status()
 
         latency_ms = int((time.monotonic() - t0) * 1000)
-        body = json.loads(response.text)  # type: ignore[union-attr]
+        body = json.loads(response.text)
         content = json.loads(body["choices"][0]["message"]["content"])
 
         priority = _parse_priority(content.get("priority", "normal"))

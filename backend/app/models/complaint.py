@@ -25,11 +25,9 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ENUM as PgEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -42,22 +40,22 @@ from app.core.enums import (
 
 # ── PostgreSQL native ENUM types ──────────────────────────────────────────────
 # create_type=False → Alembic migration owns the CREATE TYPE DDL.
-_category_enum = PgEnum(
+_category_enum = ENUM(
     *[e.value for e in ComplaintCategory],
     name="complaint_category",
     create_type=False,
 )
-_priority_enum = PgEnum(
+_priority_enum = ENUM(
     *[e.value for e in ComplaintPriority],
     name="complaint_priority",
     create_type=False,
 )
-_status_enum = PgEnum(
+_status_enum = ENUM(
     *[e.value for e in ComplaintStatus],
     name="complaint_status",
     create_type=False,
 )
-_triaged_by_enum = PgEnum(
+_triaged_by_enum = ENUM(
     *[e.value for e in TriagedBy],
     name="triaged_by",
     create_type=False,
@@ -127,7 +125,9 @@ class Complaint(Base):
     triaged_by: Mapped[str] = mapped_column(
         _triaged_by_enum,
         nullable=False,
-        comment="Which engine triaged this complaint: llm:groq | llm:ollama | rules | rules:fallback.",
+        comment=(
+            "Which engine triaged this complaint: llm:groq | llm:ollama | rules | rules:fallback."
+        ),
     )
     triage_latency_ms: Mapped[int] = mapped_column(
         Integer,

@@ -5,10 +5,8 @@ Async Redis client connection and healthcheck utilities.
 """
 
 import logging
-from typing import AsyncGenerator
 
 import redis.asyncio as aioredis
-from redis.exceptions import ConnectionError, RedisError
 
 from app.core.config import settings
 

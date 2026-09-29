@@ -5,7 +5,7 @@ Integration tests for Complaints API endpoints, fallback resilience, and health 
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -26,7 +26,7 @@ class FakeComplaintRepository:
         self.storage: dict[uuid.UUID, Complaint] = {}
 
     async def create(self, data: dict[str, Any]) -> Complaint:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         complaint = Complaint(
             id=uuid.uuid4(),
             text=data["text"],
@@ -59,7 +59,7 @@ class FakeComplaintRepository:
     async def update_status(self, complaint_id: uuid.UUID, new_status: Any) -> Complaint:
         complaint = self.storage[complaint_id]
         complaint.status = new_status.value
-        complaint.updated_at = datetime.now(timezone.utc)
+        complaint.updated_at = datetime.now(UTC)
         return complaint
 
 
@@ -84,6 +84,7 @@ def test_json_log_formatter_includes_request_context_and_fallback_fields():
 @pytest.mark.asyncio
 async def test_health_liveness_probe_does_not_touch_db(monkeypatch):
     """Verify /health returns 200 independently of database status."""
+
     async def database_probe_must_not_run():
         raise AssertionError("liveness must not probe the database")
 
@@ -207,7 +208,10 @@ async def test_complaint_status_transition_and_conflict():
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             created = await client.post(
                 "/api/complaints",
-                json={"text": "A damaged road surface causes a deep pothole", "location": "Main Road"},
+                json={
+                    "text": "A damaged road surface causes a deep pothole",
+                    "location": "Main Road",
+                },
             )
             complaint_id = created.json()["id"]
             moved = await client.patch(

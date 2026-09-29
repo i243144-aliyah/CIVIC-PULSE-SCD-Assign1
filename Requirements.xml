@@ -467,9 +467,8 @@ spec:
         <item>Evidence the gate works: a PR with a deliberately failing test, screenshot of the red check and blocked merge button, fixed in the same PR, screenshot of green.</item>
       </non_negotiables>
       <rollback>
-        <mechanism name="imperative">kubectl rollout undo deployment/backend -n civicpulse. Fast; the 3 a.m. answer.</mechanism>
         <mechanism name="declarative">Re-apply the previous overlay with the previous SHA. Auditable; the correct answer once the fire is out.</mechanism>
-        <requirement>Both demonstrated on video. Explain when to use each.</requirement>
+        <requirement>Use kubectl apply -k with the previous immutable image SHA for rollback. Demonstrate the declarative procedure on video.</requirement>
       </rollback>
     </cicd>
   </devops>

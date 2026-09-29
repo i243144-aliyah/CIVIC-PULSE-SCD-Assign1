@@ -10,7 +10,6 @@ Returns HTTP 429 with a 'Retry-After' header when the limit is exceeded.
 
 import logging
 import time
-from typing import Callable
 
 from fastapi import HTTPException, Request, status
 from redis.exceptions import RedisError
@@ -73,7 +72,9 @@ class DistributedRateLimiter:
             if current_count > max_allowed:
                 logger.warning(
                     "Rate limit exceeded for IP=%s (%d/%d requests)",
-                    client_ip, current_count, max_allowed
+                    client_ip,
+                    current_count,
+                    max_allowed,
                 )
                 return True, seconds_remaining
 
@@ -107,7 +108,10 @@ class DistributedRateLimiter:
         if is_limited:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded. Too many complaints submitted from this IP. Please try again later.",
+                detail=(
+                    "Rate limit exceeded. Too many complaints submitted from this IP. "
+                    "Please try again later."
+                ),
                 headers={"Retry-After": str(retry_after)},
             )
 

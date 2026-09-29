@@ -18,12 +18,10 @@ import os
 import random
 import re
 import time
-from typing import Any
 
 import httpx
 
 from app.core.config import settings
-from app.core.enums import ComplaintCategory, ComplaintPriority
 from app.providers.triage.base import TriageResult
 from app.providers.triage.rules import RuleBasedTriage
 
@@ -78,12 +76,16 @@ class LLMTriage:
             except (httpx.TimeoutException, TimeoutError) as exc:
                 logger.debug(
                     "LLMTriage timeout on attempt %d/%d (%s)",
-                    attempts, max_attempts, type(exc).__name__
+                    attempts,
+                    max_attempts,
+                    type(exc).__name__,
                 )
                 if attempts < max_attempts:
                     self._apply_jitter()
                     continue
-                return self._trigger_fallback(text, location, type(exc).__name__, "Request timed out after 10s")
+                return self._trigger_fallback(
+                    text, location, type(exc).__name__, "Request timed out after 10s"
+                )
 
             except httpx.HTTPStatusError as exc:
                 status_code = exc.response.status_code
@@ -95,8 +97,7 @@ class LLMTriage:
                 # Retry ONLY on 429 (Rate Limit) and 5xx (Server Error)
                 if status_code == 429 or 500 <= status_code < 600:
                     logger.debug(
-                        "LLMTriage HTTP %d on attempt %d/%d",
-                        status_code, attempts, max_attempts
+                        "LLMTriage HTTP %d on attempt %d/%d", status_code, attempts, max_attempts
                     )
                     if attempts < max_attempts:
                         self._apply_jitter()
@@ -110,18 +111,31 @@ class LLMTriage:
                 err_type = type(exc).__name__
 
                 # Check if it is a retryable 429/5xx or timeout error
-                is_rate_limit = "429" in err_str or "quota" in err_str.lower() or "resourceexhausted" in err_str.lower()
-                is_server_error = "500" in err_str or "503" in err_str or "unavailable" in err_str.lower()
+                is_rate_limit = (
+                    "429" in err_str
+                    or "quota" in err_str.lower()
+                    or "resourceexhausted" in err_str.lower()
+                )
+                is_server_error = (
+                    "500" in err_str or "503" in err_str or "unavailable" in err_str.lower()
+                )
                 is_timeout = "timeout" in err_str.lower() or "deadline" in err_str.lower()
 
                 if (is_rate_limit or is_server_error or is_timeout) and attempts < max_attempts:
-                    logger.debug("LLMTriage retryable error %s on attempt %d/%d", err_type, attempts, max_attempts)
+                    logger.debug(
+                        "LLMTriage retryable error %s on attempt %d/%d",
+                        err_type,
+                        attempts,
+                        max_attempts,
+                    )
                     self._apply_jitter()
                     continue
 
                 return self._trigger_fallback(text, location, err_type, err_str)
 
-        return self._trigger_fallback(text, location, "MaxRetriesExceeded", "All attempts exhausted")
+        return self._trigger_fallback(
+            text, location, "MaxRetriesExceeded", "All attempts exhausted"
+        )
 
     def _execute_call(self, text: str, location: str) -> TriageResult:
         """Route to appropriate LLM backend."""
@@ -212,7 +226,9 @@ Complaint: {text}
         jitter_seconds = 0.5 + random.uniform(0.1, 0.5)
         time.sleep(jitter_seconds)
 
-    def _trigger_fallback(self, text: str, location: str, err_class: str, err_msg: str) -> TriageResult:
+    def _trigger_fallback(
+        self, text: str, location: str, err_class: str, err_msg: str
+    ) -> TriageResult:
         """
         Record the failure class and fall back to RuleBasedTriage.
         """

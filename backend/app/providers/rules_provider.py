@@ -118,7 +118,7 @@ class RulesProvider:
         latency_ms = int((time.monotonic() - t0) * 1000)
         return TriageResult(
             priority=priority,
-            ai_summary=None,    # rules engine does not generate summaries
+            ai_summary=None,  # rules engine does not generate summaries
             triaged_by=triaged_by,
             latency_ms=latency_ms,
         )
