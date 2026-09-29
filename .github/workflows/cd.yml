@@ -99,3 +99,47 @@ jobs:
           image: ${{ env.IMAGE_NAMESPACE }}/civicpulse-frontend:${{ github.sha }}
           artifact-name: civicpulse-frontend-${{ github.sha }}.spdx.json
           output-file: civicpulse-frontend-${{ github.sha }}.spdx.json
+
+  deploy-k8s:
+    name: Deploy to Kubernetes
+    needs: build-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAMESPACE: ghcr.io/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: civicpulse
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+      - name: Install kustomize
+        run: |
+          curl --fail --silent --show-error --location \
+            https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz \
+            | tar -xz -C /tmp
+          sudo install /tmp/kustomize /usr/local/bin/kustomize
+      - name: Create registry pull secret
+        run: |
+          kubectl create namespace civicpulse --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace civicpulse \
+            --docker-server=ghcr.io \
+            --docker-username="${GITHUB_ACTOR}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Apply immutable production manifests
+        working-directory: k8s/overlays/prod
+        run: |
+          kustomize edit set image \
+            backend=${IMAGE_NAMESPACE}/civicpulse-backend:${{ github.sha }} \
+            frontend=${IMAGE_NAMESPACE}/civicpulse-frontend:${{ github.sha }}
+          kubectl apply -k .
+          kubectl -n civicpulse rollout status deployment/backend --timeout=180s
+          kubectl -n civicpulse rollout status deployment/frontend --timeout=180s
