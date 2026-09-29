@@ -133,6 +133,50 @@ jobs:
           sudo install /tmp/kubeconform /usr/local/bin/kubeconform
       - name: Build and validate production manifests
         run: kustomize build k8s/overlays/prod | kubeconform -strict -summary
+
+  integration:
+    name: Compose integration smoke test
+    runs-on: ubuntu-latest
+    env:
+      TRIAGE_PROVIDER: simulated
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the Compose stack
+        run: docker compose up -d --build
+      - name: Exercise the API end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker compose down -v' EXIT
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:8000/ready >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 60 ]]; then
+              echo "Backend did not become ready" >&2
+              docker compose logs backend
+              exit 1
+            fi
+            sleep 2
+          done
+
+          complaint=$(curl --fail --silent --request POST http://localhost:8000/api/complaints \
+            --header 'Content-Type: application/json' \
+            --data '{"text":"A burst water pipe is flooding the main road","location":"Civic Square"}')
+          complaint_id=$(jq -r '.id' <<<"$complaint")
+          [[ "$complaint_id" != "null" && -n "$complaint_id" ]]
+
+          curl --fail --silent "http://localhost:8000/api/complaints/$complaint_id" \
+            | jq -e '.category == "water"'
+
+          curl --fail --silent --dump-header /tmp/stats-miss.headers \
+            http://localhost:8000/api/stats >/tmp/stats-miss.json
+          grep --quiet --ignore-case '^X-Cache: MISS' /tmp/stats-miss.headers
+
+          curl --fail --silent --dump-header /tmp/stats-hit.headers \
+            http://localhost:8000/api/stats >/tmp/stats-hit.json
+          grep --quiet --ignore-case '^X-Cache: HIT' /tmp/stats-hit.headers
       - name: Scan frontend image
         uses: aquasecurity/trivy-action@0.28.0
         with:
